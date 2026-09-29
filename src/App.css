@@ -1,0 +1,540 @@
+:root {
+  --bg: #12141a;
+  --bg-raised: #1a1d26;
+  --bg-hover: #232735;
+  --border: #2c3142;
+  --text: #e4e7f0;
+  --text-dim: #8b92a8;
+  --accent: #5b8cff;
+  --accent-hover: #7aa2ff;
+  --green: #3ecf8e;
+  --red: #ff6b6b;
+  --mark-bg: #4a3b1e;
+  --mark-text: #ffd479;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.hint {
+  color: var(--text-dim);
+  flex: 1;
+}
+
+kbd {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.keys {
+  white-space: nowrap;
+}
+
+button.hotkey {
+  min-width: 130px;
+  font-size: 13px;
+}
+
+button.hotkey.recording {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  animation: pulse 1s infinite;
+}
+
+.hotkey-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.hotkey-hint {
+  max-width: 220px;
+  text-align: right;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.fix-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pane {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.pane h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.text {
+  margin: 0;
+  line-height: 1.55;
+  user-select: text;
+}
+
+.text.original {
+  color: var(--text);
+}
+
+.text.fixed {
+  color: var(--green);
+  font-weight: 500;
+}
+
+.text.nochange {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-style: italic;
+}
+
+mark {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: help;
+}
+
+/* ---------------- clickable words in the original pane ---------------- */
+
+.pane-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.text.original button.word {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 0 1px;
+  cursor: pointer;
+}
+
+.text.original button.word:hover {
+  background: var(--bg-hover);
+  outline: 1px solid var(--border);
+}
+
+.text.original button.word.err {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+}
+
+.text.original button.word.err:hover {
+  outline: 1px solid var(--mark-text);
+}
+
+/* word picker popover (anchored inside the original pane) */
+
+.pop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: transparent;
+}
+
+.wordpop {
+  position: absolute;
+  z-index: 10;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.wordpop-msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.wordpop .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.wordpop .chips button {
+  padding: 3px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+.wordpop .chips button:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.wordpop-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wordpop-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  user-select: text;
+}
+
+.wordpop-row button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.badge {
+  background: var(--bg-hover);
+  color: var(--mark-text);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+.badge.green {
+  color: var(--green);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+button {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--bg-hover);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+}
+
+button.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+}
+
+button.ghost:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+button.danger {
+  color: var(--red);
+}
+
+button.linklike {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  padding: 4px 0;
+  text-align: left;
+}
+
+button.linklike:hover {
+  color: var(--text);
+}
+
+.kbd {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.status {
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.status.error {
+  color: var(--red);
+}
+
+.devbox {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.devbox summary {
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.devgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.devgrid textarea {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  resize: vertical;
+  user-select: text;
+}
+
+.devbtns {
+  display: flex;
+  gap: 10px;
+}
+
+.history {
+  margin-top: auto;
+}
+
+.history ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.history li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.history .time {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.history .horig {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history .arrow {
+  color: var(--green);
+}
+
+.history .hfixed {
+  color: var(--green);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- settings window ---------------- */
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.setting-row strong {
+  font-size: 14px;
+}
+
+.setting-row .sub {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.setting-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.hotkey {
+  white-space: nowrap;
+}
+
+/* custom dictionary (settings + review picker) */
+
+.dictionary {
+  margin: -10px 0 18px;
+}
+
+.add-word {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.add-word input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  user-select: text;
+}
+
+.add-word button {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.word-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.word-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 6px 3px 12px;
+  font-size: 13px;
+}
+
+.word-chip .chip-x {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 0 5px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.word-chip .chip-x:hover {
+  color: var(--mark-text);
+}
+
+.wordpop .dict-add {
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.wordpop .dict-add:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.about {
+  margin-top: auto;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
