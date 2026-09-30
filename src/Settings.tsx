@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { chordFromEvent, prettyChord, type Settings } from "./types";
+import { chordFromEvent, prettyChord, type Abbreviation, type Settings } from "./types";
 
 /**
  * Click-to-record hotkey button. Modifier-only keydowns update the preview;
@@ -76,6 +76,9 @@ function Settings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState("");
   const [newWord, setNewWord] = useState("");
+  const [newTrigger, setNewTrigger] = useState("");
+  const [newExpansion, setNewExpansion] = useState("");
+  const [newIgnored, setNewIgnored] = useState("");
 
   useEffect(() => {
     invoke<Settings>("get_settings").then(setSettings).catch((e) => setError(String(e)));
@@ -90,17 +93,31 @@ function Settings() {
     // never appear here.
     const refetch = () => invoke<Settings>("get_settings").then(setSettings).catch(() => {});
     window.addEventListener("focus", refetch);
-    // Live-follow dictionary edits made in the review window while open.
+    // Live-follow edits made in the review window while open.
     const unlisten = getCurrentWebviewWindow().listen<{ words: string[] }>(
       "custom-words-changed",
       (e) => {
         setSettings((s) => (s ? { ...s, customWords: e.payload.words } : s));
       },
     );
+    const unlistenAbbr = getCurrentWebviewWindow().listen<{ abbreviations: Abbreviation[] }>(
+      "abbreviations-changed",
+      (e) => {
+        setSettings((s) => (s ? { ...s, abbreviations: e.payload.abbreviations } : s));
+      },
+    );
+    const unlistenIgn = getCurrentWebviewWindow().listen<{ words: string[] }>(
+      "ignored-words-changed",
+      (e) => {
+        setSettings((s) => (s ? { ...s, ignoredWords: e.payload.words } : s));
+      },
+    );
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("focus", refetch);
       unlisten.then((f) => f()).catch(() => {});
+      unlistenAbbr.then((f) => f()).catch(() => {});
+      unlistenIgn.then((f) => f()).catch(() => {});
     };
   }, []);
 
@@ -157,6 +174,62 @@ function Settings() {
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  const addAbbreviation = async () => {
+    if (!newTrigger.trim() || !newExpansion.trim()) return;
+    try {
+      const abbreviations = await invoke<Abbreviation[]>("add_abbreviation", {
+        trigger: newTrigger,
+        expansion: newExpansion,
+      });
+      setSettings((s) => (s ? { ...s, abbreviations } : s));
+      setNewTrigger("");
+      setNewExpansion("");
+      setError("");
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const removeAbbreviation = async (t: string) => {
+    try {
+      const abbreviations = await invoke<Abbreviation[]>("remove_abbreviation", { trigger: t });
+      setSettings((s) => (s ? { ...s, abbreviations } : s));
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const addIgnoredWord = async () => {
+    if (!newIgnored.trim()) return;
+    try {
+      const words = await invoke<string[]>("add_ignored_word", { word: newIgnored });
+      setSettings((s) => (s ? { ...s, ignoredWords: words } : s));
+      setNewIgnored("");
+      setError("");
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const removeIgnoredWord = async (w: string) => {
+    try {
+      const words = await invoke<string[]>("remove_ignored_word", { word: w });
+      setSettings((s) => (s ? { ...s, ignoredWords: words } : s));
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const toggleConfirmGuesses = (enabled: boolean) => {
+    setSettings((s) => (s ? { ...s, confirmGuesses: enabled } : s));
+    invoke<boolean>("set_confirm_guesses", { enabled })
+      .then((ok) => setSettings((s) => (s ? { ...s, confirmGuesses: ok } : s)))
+      .catch((e) => {
+        setError(String(e));
+        invoke<Settings>("get_settings").then(setSettings).catch(() => {});
+      });
   };
 
   if (!settings) {
@@ -245,6 +318,123 @@ function Settings() {
               ))}
           </div>
         )}
+      </section>
+
+      <section className="setting-row">
+        <div>
+          <strong>Abbreviations</strong>
+          <p className="sub">A shortcut expands to the full term, even one letter off</p>
+        </div>
+      </section>
+      <section className="dictionary">
+        <div className="add-abbrev">
+          <input
+            aria-label="New abbreviation trigger"
+            placeholder="sc2"
+            value={newTrigger}
+            onChange={(e) => setNewTrigger(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addAbbreviation();
+              }
+            }}
+          />
+          <input
+            aria-label="New abbreviation expansion"
+            placeholder="StarCraft 2"
+            value={newExpansion}
+            onChange={(e) => setNewExpansion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addAbbreviation();
+              }
+            }}
+          />
+          <button aria-label="Add abbreviation" onClick={addAbbreviation}>
+            Add
+          </button>
+        </div>
+        {settings.abbreviations.length === 0 ? (
+          <p className="sub">No abbreviations yet. Type a shortcut and its full term — or add one from the review window.</p>
+        ) : (
+          <div className="word-list">
+            {settings.abbreviations.map((a) => (
+              <span className="word-chip" key={a.trigger.toLowerCase()}>
+                {a.trigger} → {a.expansion}
+                <button
+                  className="chip-x"
+                  aria-label={`Remove abbreviation ${a.trigger}`}
+                  title={`Remove ${a.trigger}`}
+                  onClick={() => removeAbbreviation(a.trigger)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="setting-row">
+        <div>
+          <strong>Ignored words</strong>
+          <p className="sub">Codes and IDs (s12, mp3) are never flagged and never suggested</p>
+        </div>
+      </section>
+      <section className="dictionary">
+        <div className="add-word">
+          <input
+            aria-label="New ignored word"
+            placeholder="Type a code, press Enter"
+            value={newIgnored}
+            onChange={(e) => setNewIgnored(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addIgnoredWord();
+              }
+            }}
+          />
+          <button aria-label="Add ignored word" onClick={addIgnoredWord}>
+            Add
+          </button>
+        </div>
+        {settings.ignoredWords.length === 0 ? (
+          <p className="sub">Nothing ignored. ZWriter leaves these exactly as you typed them.</p>
+        ) : (
+          <div className="word-list">
+            {[...settings.ignoredWords]
+              .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+              .map((w) => (
+                <span className="word-chip" key={w.toLowerCase()}>
+                  {w}
+                  <button
+                    className="chip-x"
+                    aria-label={`Remove ignored word ${w}`}
+                    title={`Remove ${w}`}
+                    onClick={() => removeIgnoredWord(w)}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+          </div>
+        )}
+      </section>
+
+      <section className="setting-row">
+        <div>
+          <strong>Confirm guessed abbreviations</strong>
+          <p className="sub">Quick fix asks before applying a near-match like se2 → StarCraft 2</p>
+        </div>
+        <input
+          type="checkbox"
+          aria-label="Confirm guessed abbreviations"
+          checked={settings.confirmGuesses}
+          onChange={(e) => toggleConfirmGuesses(e.target.checked)}
+        />
       </section>
 
       <section className="setting-row">

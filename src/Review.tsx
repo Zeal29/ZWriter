@@ -157,16 +157,19 @@ function Review() {
       setFixChord(e.payload.fixHotkey);
       setQuickChord(e.payload.quickHotkey);
     });
-    // A word added/removed here or in Settings changes the engine's
-    // dictionary — re-check the text currently shown so its lints follow.
-    const unlistenDict = getCurrentWebviewWindow().listen("custom-words-changed", () => {
+    // A word added/removed here or in Settings changes what the engine
+    // finds — re-check the text currently shown so its lints follow.
+    const rerun = () => {
       const f = pendingRef.current;
       if (!f) return;
       const cmd = fromCaptureRef.current
         ? invoke<FixReady>("update_pending", { text: f.original })
         : invoke<FixReady>("fix_text", { text: f.original });
       cmd.then(setFix).catch(() => {});
-    });
+    };
+    const unlistenDict = getCurrentWebviewWindow().listen("custom-words-changed", rerun);
+    const unlistenAbbr = getCurrentWebviewWindow().listen("abbreviations-changed", rerun);
+    const unlistenIgn = getCurrentWebviewWindow().listen("ignored-words-changed", rerun);
     invoke<FixReady | null>("get_pending")
       .then((p) => {
         if (p) {
@@ -186,6 +189,8 @@ function Review() {
       unlistenP.then((f) => f()).catch(() => {});
       unlistenHk.then((f) => f()).catch(() => {});
       unlistenDict.then((f) => f()).catch(() => {});
+      unlistenAbbr.then((f) => f()).catch(() => {});
+      unlistenIgn.then((f) => f()).catch(() => {});
     };
   }, [refreshHistory]);
 
@@ -297,6 +302,33 @@ function Review() {
       .catch((e) => setStatus(`Could not add word: ${e}`));
   }, []);
 
+  /** Teach an abbreviation: the picked word is the trigger, the popover's
+   *  edit box holds the full term. The engine re-run comes from the
+   *  abbreviations-changed event the command emits. */
+  const addAsAbbreviation = useCallback(() => {
+    const p = pickedRef.current;
+    if (!p) return;
+    const trigger = stripWord(p.word);
+    const expansion = editVal.trim();
+    if (!trigger || !expansion) return;
+    setPicked(null);
+    invoke("add_abbreviation", { trigger, expansion })
+      .then(() => setStatus(`"${trigger}" now expands to "${expansion}".`))
+      .catch((e) => setStatus(`Could not add abbreviation: ${e}`));
+  }, [editVal]);
+
+  /** Ignore this exact token: never flagged, never guessed, never suggested. */
+  const ignoreWord = useCallback(() => {
+    const p = pickedRef.current;
+    if (!p) return;
+    const w = stripWord(p.word);
+    if (!w) return;
+    setPicked(null);
+    invoke("add_ignored_word", { word: w })
+      .then(() => setStatus(`"${w}" will be left as-is.`))
+      .catch((e) => setStatus(`Could not ignore word: ${e}`));
+  }, []);
+
   const simulate = () => {
     setStatus("Capturing selection… (select text first)");
     invoke("simulate_hotkey").catch(() => {});
@@ -382,6 +414,29 @@ function Review() {
                       onClick={addToDictionary}
                     >
                       + Add to dictionary
+                    </button>
+                  )}
+                  {stripWord(picked.word) && (
+                    <button
+                      type="button"
+                      className="dict-add"
+                      aria-label="Add as abbreviation"
+                      title="Type the full term in the box below first"
+                      disabled={!editVal.trim() || editVal.trim() === picked.word.trim()}
+                      onClick={addAsAbbreviation}
+                    >
+                      + Add as abbreviation
+                    </button>
+                  )}
+                  {stripWord(picked.word) && (
+                    <button
+                      type="button"
+                      className="dict-add"
+                      aria-label="Ignore word"
+                      title="Never flag or suggest this token"
+                      onClick={ignoreWord}
+                    >
+                      + Ignore word
                     </button>
                   )}
                   <div className="wordpop-row">

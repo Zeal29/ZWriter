@@ -465,6 +465,7 @@ fn remove_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, Stri
 /// Option A <-> B toggle for the quick path's guessed abbreviations.
 #[tauri::command]
 fn set_confirm_guesses(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    println!("[zwriter] set_confirm_guesses({enabled})");
     {
         let state = app.state::<AppState>();
         state.settings.lock().unwrap().confirm_guesses = enabled;

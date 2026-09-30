@@ -490,6 +490,30 @@ button.linklike:hover {
   font-size: 13px;
 }
 
+/* abbreviation row: trigger + expansion side by side */
+.add-abbrev {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.add-abbrev input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  user-select: text;
+}
+
+.add-abbrev button {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
 .word-list {
   display: flex;
   flex-wrap: wrap;

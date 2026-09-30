@@ -225,7 +225,9 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
             push_history(&state, e);
             return;
         }
-        if !confirm_guesses(&app) {
+        let cg = confirm_guesses(&app);
+        println!("[zwriter] quick: guess pending, confirm_guesses={cg}");
+        if !cg {
             // Opted out: auto-apply unambiguous guesses. An ambiguous guess
             // (one edit from TWO triggers) has no safe auto-answer — window.
             let (fixed2, lints2) = state.engine.lock().unwrap().fix(&payload.original, true);

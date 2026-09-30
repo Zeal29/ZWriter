@@ -43,6 +43,27 @@ app the user started in.
 - **custom-words-changed** = event `add_custom_word`/`remove_custom_word`
   emit to `main`; Review.tsx re-runs the engine on the text it is showing, so
   a word added in Settings unflags the open review live (and vice versa).
+- **Abbreviation** = user-taught pair: **trigger** (`sc2`) → **expansion**
+  (`StarCraft 2`). settings.json `abbreviations` → `Settings.abbreviations`.
+  Canonical trigger: lowercased, whitespace-stripped. **Exact match**:
+  case-insensitive + space-skipping, word-bounded. **Guessed match**: one
+  in-word letter edit off a digit-bearing trigger (digits must match per
+  position — `sc3` is never StarCraft 2); a guess is a suggestion chip,
+  never auto-applied from the engine, EXCEPT by the quick path when
+  `confirmGuesses` is off and the guess is unambiguous. **Ambiguous guess**
+  (one edit from 2+ triggers) always opens the review window.
+- **Ignored word** = exact token (settings.json `ignoredWords`) never
+  flagged, never guessed, never suggested — for IDs/codes (`s12`), distinct
+  from the custom dictionary ("this IS a word"). Precedence per token:
+  exact abbreviation > ignored > guessed > harper.
+- **Alphanumeric rule** = a letter+digit run (`sc2`, `s12`, `mp3`, `x86`)
+  never gets Spelling OR Capitalization lints (harper nags `mp3`→`MP3`).
+- **abbreviations-changed** / **ignored-words-changed** = broadcast events
+  from the add/remove commands; Review.tsx re-runs the engine, Settings.tsx
+  live-syncs (same pattern as custom-words-changed).
+- **Popover teach buttons** = "+ Add as abbreviation" (trigger = picked
+  word, expansion = the popover's edit box) and "+ Ignore word" next to
+  "+ Add to dictionary".
 
 ## Non-obvious rules (learned the hard way)
 
@@ -136,6 +157,29 @@ app the user started in.
     itself as first suggestion = this bug). Use
     `Document::new(text, parser, &merged_dict)` (what harper-ls does) and
     rebuild it together with the LintGroup. Probe-verified 2026-09-29.
+21. **settings.json keys are hand-rolled in TWO places** — `load_settings`
+    per-key overlay AND `save_settings`'s `json!` block. A new key added to
+    only one side silently doesn't persist. Happened-by-design warning, not
+    yet a bug: every settings addition must touch both (v0.2 added
+    `abbreviations`, `ignoredWords`, `confirmGuesses` to both).
+22. **harper's curated dictionary contains 2-letter entries** — probe:
+    `se`, `cs`, `sd` are all "words" (postal/state/ISO codes). Any "is the
+    stem a real word?" guard must only apply at 3+ letters, or it kills
+    exactly the letter+digit codes it was meant to protect (`se2`→guess
+    blocked). Also probe-verified: harper's sentence-start Capitalization
+    fires on "is there a tool for sc2 here" but NOT on "the sc2 game" —
+    expected outputs must be probed, not assumed from grammar intuition.
+23. **An unverified UIA click on a toggle silently tests the wrong branch** —
+    Click-Button-style helpers return "found" after ONE geometry click; if
+    the click was eaten by focus or a stale post-scroll rect, the setting
+    never changed and downstream checks fail confusingly (M6-M8, first
+    smoke run of v0.2). Fix: `Set-Checkbox` reads ToggleState, clicks, and
+    RE-READS until the state matches (or retries out). Verify state, never
+    the click.
+24. **Text-driven guess passes must be TRIGGER-shaped, not run-shaped** —
+    squashing spaces to find "candidate tokens" fuses the whole sentence
+    into one run ("whatisse2anyway"). Match at word starts against each
+    trigger (bounded by trigger shape), like the exact pass does.
 
 ## Knowledge sources
 
@@ -162,6 +206,36 @@ app the user started in.
   docs/SELF-TESTING.md.
 
 ## Verified / Questions / Assumptions
+
+**Verified (2026-09-30, eleventh session — v0.2 abbreviations + ignored words):**
+- Shipped end-to-end per `docs/superpowers/specs/2026-09-30-abbreviations-ignore-design.md`:
+  engine passes (exact abbreviation, guessed, ignore, alphanumeric rule for
+  Spelling AND Capitalization), `Settings.abbreviations/ignored_words/
+  confirm_guesses` (settings.json `abbreviations`/`ignoredWords`/
+  `confirmGuesses`), 5 commands (`add_abbreviation`, `remove_abbreviation`,
+  `add_ignored_word`, `remove_ignored_word`, `set_confirm_guesses`), events
+  `abbreviations-changed`/`ignored-words-changed`, Settings sections
+  (Abbreviations, Ignored words, Confirm-guessed checkbox; window height
+  520→640), popover buttons "+ Add as abbreviation"/"+ Ignore word".
+- `cargo test` **31/31** (16 old + 14 engine + 1 flow); `pnpm build` green;
+  release + NSIS rebuilt twice (second time for tauri.conf + diagnostics).
+- Smoke suite **117/117** (was 68) — new sections J1–J13, K1–K7, L1–L3,
+  M1–M14, N1–N12; log invariants L1 fix-ready=15, L2 pasted=9, 0 failed
+  captures. User settings backed up + restored by the suite.
+- Guess design truth from the build: guesses are TRIGGER-shaped matches at
+  word starts (a space-squashed "token" pass fused whole sentences — rule 24);
+  ambiguity is real and correct: with `sl2` defined, `se2` is one edit from
+  BOTH sc2 and sl2, so quick-fix asked even with confirm OFF — the first
+  M-failures were a bad TEST word, not an app bug. Suite now uses
+  cs2→"Counter-Strike 2" + `cc2` for the ambiguous case.
+- Checkbox toggles must be VERIFIED (Set-Checkbox reads ToggleState): the
+  first M-run's unverified click left confirm=true while the checkbox LOOKED
+  off (rules 23). Popover backdrop eats Skip clicks — ESC the popover before
+  Dismiss-Review (section F's trap, hit again in M; N8 also fixed by using
+  "mistkae" — "thiss" was still whitelisted from section I).
+- Diagnostics kept: `set_confirm_guesses(...)` + `quick: guess pending,
+  confirm_guesses=...` log lines (they pinpointed the correct-branch/ambiguous
+  behavior in one run).
 
 **Verified (2026-09-30, tenth session — default hotkeys changed):**
 - Defaults are now **ctrl+shift+space** (fix with review) / **ctrl+space**

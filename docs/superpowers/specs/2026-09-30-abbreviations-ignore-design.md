@@ -52,9 +52,11 @@ LintGroup rebuilds: `abbrs: Vec<(String /*canonical*/, String /*expansion*/)>`,
 pipeline becomes:
 
 1. Smart-quote normalize (unchanged), build Document, `group.lint` (unchanged).
-2. Retain pass (unchanged rules, plus one): also drop harper **Spelling**
-   lints whose span, extended to the enclosing alphanumeric run, mixes letters
-   and digits. Extend-to-run handles harper splitting `sc2` into `sc` + `2`.
+2. Retain pass (unchanged rules, plus one): also drop harper **Spelling** and
+   **Capitalization** lints whose span, extended to the enclosing
+   alphanumeric run, mixes letters and digits. Extend-to-run handles harper
+   splitting `sc2` into `sc` + `2`; Capitalization is included because harper
+   nags `mp3` → `MP3` ("canonical spelling is all-caps").
 3. `remove_overlaps` (unchanged).
 4. **Abbreviation pass** (new). Scan word starts (a char preceded by a
    non-alphanumeric). At each start, try each trigger longest-first, comparing
@@ -64,14 +66,16 @@ pipeline becomes:
    alphanumeric). Each exact match emits a lint:
    `kind: "Abbreviation"`, `guessed: false`, `priority: 0`,
    `suggestions: [expansion]`, span = the consumed original chars.
-5. **Guess pass** (new). For each alphanumeric run that (a) did not exact-
-   match, (b) is not inside an ignored word, (c) contains ≥1 digit, (d) whose
-   letter-run is **not** a dictionary word (checked via
-   `MergedDictionary::contains_word`; verify the trait method name during
-   implementation — this is what keeps `men2`/`set2`-style real-word stems out
-   of guessing): compare against every trigger's canonical form under the
-   edit rule — **same length, digits identical at every position, at most one
-   letter substitution or one adjacent-letter transposition**.
+5. **Guess pass** (new). At each word start not already exact-matched, match
+   trigger-shaped with one tolerated in-word letter edit — substitution or
+   adjacent transposition, digits identical at every position, never across a
+   skipped space, and the trigger must carry ≥1 digit (so plain words can
+   never match, and digit-less triggers only ever expand exactly). The token
+   must not be ignored, and its letter-stem must **not be a dictionary word
+   at 3+ letters** (probe-verified: harper's curated FST contains two-letter
+   entries — `se`, `cs`, `sd` are "words" — so guarding those would kill
+   exactly the two-letter+digit codes this feature serves; `set2` → `set`
+   stays protected).
    - Exactly one trigger matches → one lint `kind: "AbbreviationGuess"`,
      `guessed: true`, `suggestions: [expansion]`.
    - Two or more → one lint `guessed: true` whose `suggestions` lists every
@@ -253,12 +257,17 @@ exe, settings backed up/restored as today:
 
 ## Risks / open points
 
-- `contains_word` on `MergedDictionary`: expected on harper's `Dictionary`
-  trait; verify signature at implementation time (fallback: build a throwaway
-  Document token check). No design impact.
+- ~~`contains_word` on `MergedDictionary`~~ RESOLVED: `Dictionary::contains_word(&[char]) -> bool` exists (docs.rs, in scope via `use ... spell::Dictionary as _`).
 - The alphanumeric rule is a behavior change: a *misspelled* letter+digit
   token (rare — `belive2`) is no longer flagged. Accepted: the class of false
   positives it kills (sc2/s12/mp3) is 100× more common.
 - Smart-quote normalization already maps ‘’“”→'"; triggers containing
   apostrophes are out of scope (canonical triggers are alnum-only after
   whitespace strip — validation enforces this).
+- Probe-verified harper quirk: sentence-start Capitalization fires on "is
+  there a tool for sc2 here" but NOT on "the sc2 game" — expected outputs in
+  tests are asserted against probed engine behavior, not assumed grammar.
+- The popover's ignore/dictionary buttons operate on the STRIPPED word
+  (`stripWord`); a token still present in the custom dictionary arrives
+  pre-whitelisted regardless of the ignore list — dictionary beats ignore
+  for spelling (whitelisted words are never linted at all).

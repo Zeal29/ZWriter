@@ -7,6 +7,14 @@ export interface Lint {
   /** Every engine suggestion for this lint; null = remove the word. */
   suggestions: (string | null)[];
   priority: number;
+  /** A GUESSED abbreviation (one-edit-away): a suggestion, not a fact. */
+  guessed: boolean;
+}
+
+/** User-taught abbreviation: trigger "sc2" expands to "StarCraft 2". */
+export interface Abbreviation {
+  trigger: string;
+  expansion: string;
 }
 
 export interface FixReady {
@@ -33,6 +41,9 @@ export interface Settings {
   quickHotkey: string; // fix + paste immediately, e.g. "ctrl+space"
   autostart: boolean;
   customWords: string[]; // never flagged as spelling errors (case-insensitive)
+  abbreviations: Abbreviation[]; // taught trigger -> expansion pairs
+  ignoredWords: string[]; // codes/IDs: never flagged, never suggested
+  confirmGuesses: boolean; // quick fix asks before applying a GUESSED abbr
 }
 
 /** "ctrl+shift+space" -> "Ctrl + Shift + Space" for display. */
