@@ -29,13 +29,13 @@ export interface HistoryEntry {
 }
 
 export interface Settings {
-  fixHotkey: string; // fix with review window, e.g. "ctrl+alt+g"
-  quickHotkey: string; // fix + paste immediately, e.g. "ctrl+alt+f"
+  fixHotkey: string; // fix with review window, e.g. "ctrl+shift+space"
+  quickHotkey: string; // fix + paste immediately, e.g. "ctrl+space"
   autostart: boolean;
   customWords: string[]; // never flagged as spelling errors (case-insensitive)
 }
 
-/** "ctrl+alt+g" -> "Ctrl + Alt + G" for display. */
+/** "ctrl+shift+space" -> "Ctrl + Shift + Space" for display. */
 export function prettyChord(chord: string): string {
   return chord
     .split("+")

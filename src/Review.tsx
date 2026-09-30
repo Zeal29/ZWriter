@@ -121,8 +121,8 @@ function Review() {
   const [showHistory, setShowHistory] = useState(false);
   const [demoText, setDemoText] = useState(DEMO_TEXT);
   const [status, setStatus] = useState<string>("");
-  const [fixChord, setFixChord] = useState("ctrl+alt+g");
-  const [quickChord, setQuickChord] = useState("ctrl+alt+f");
+  const [fixChord, setFixChord] = useState("ctrl+shift+space");
+  const [quickChord, setQuickChord] = useState("ctrl+space");
   const [picked, setPicked] = useState<WordPick | null>(null);
   const [editVal, setEditVal] = useState("");
   const pendingRef = useRef<FixReady | null>(null);

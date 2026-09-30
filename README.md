@@ -1,7 +1,7 @@
 # ZWriter
 
 **System-wide, offline grammar fixer for Windows.** Select text anywhere,
-press **Ctrl+Alt+G**, and ZWriter fixes spelling and grammar mistakes and
+press **Ctrl+Shift+Space**, and ZWriter fixes spelling and grammar mistakes and
 pastes the result right back where you were typing.
 
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
@@ -25,7 +25,7 @@ machine.
 4. One click (or `Enter`) pastes the fix back into the app you started in.
    Your clipboard is restored afterwards.
 
-There is also a **quick-fix hotkey** (`Ctrl+Alt+F`) that pastes the fix
+There is also a **quick-fix hotkey** (`Ctrl+Space`) that pastes the fix
 immediately with no window at all — and stays silent when your text is
 already clean.
 
@@ -41,8 +41,8 @@ already clean.
   alternative the engine offers, or type your own replacement; the fix
   updates live.
 - **Rebindable hotkeys** — click a hotkey field in Settings and press any
-  `Ctrl`/`Alt`/`Shift` combination. Conflicts with other apps are detected
-  and rolled back.
+  key combination (e.g. `Ctrl+Shift+Space`). Conflicts with other apps are
+  detected and rolled back.
 - **History** — the last 50 fixes, viewable in the review window.
 - **Tray app** — lives in the system tray; Start-with-Windows optional;
   quit from the tray menu.
@@ -96,8 +96,8 @@ For development with hot reload: `scripts\dev.bat`.
 
 | Action | How |
 |--------|-----|
-| Fix with review | Select text → `Ctrl+Alt+G` → **Apply** (`Enter`) |
-| Fix instantly | Select text → `Ctrl+Alt+F` |
+| Fix with review | Select text → `Ctrl+Shift+Space` → **Apply** (`Enter`) |
+| Fix instantly | Select text → `Ctrl+Space` |
 | Skip a suggestion | `Esc` or the **Skip** button |
 | Whitelist a word | Click the flagged word → **+ Add to dictionary** |
 | Replace a word manually | Click any word → pick a suggestion or type your own |

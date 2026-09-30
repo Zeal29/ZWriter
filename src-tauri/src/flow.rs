@@ -14,8 +14,8 @@ use crate::engine::{Engine, LintJson};
 use crate::wininput;
 
 pub const HISTORY_CAP: usize = 50;
-pub const DEFAULT_FIX_HOTKEY: &str = "ctrl+alt+g";
-pub const DEFAULT_QUICK_HOTKEY: &str = "ctrl+alt+f";
+pub const DEFAULT_FIX_HOTKEY: &str = "ctrl+shift+space";
+pub const DEFAULT_QUICK_HOTKEY: &str = "ctrl+space";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,9 +50,9 @@ pub struct HistoryEntry {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
-    /// Fix with review window (default ctrl+alt+g).
+    /// Fix with review window (default ctrl+shift+space).
     pub fix_hotkey: String,
-    /// Fix and paste immediately, no review (default ctrl+alt+f).
+    /// Fix and paste immediately, no review (default ctrl+space).
     pub quick_hotkey: String,
     pub autostart: bool,
     /// The user's custom dictionary: these words are never flagged as
@@ -313,5 +313,28 @@ struct BusyGuard<'a>(&'a AtomicBool);
 impl Drop for BusyGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::Shortcut;
+
+    #[test]
+    fn default_hotkeys_are_space_chords() {
+        let s = default_settings();
+        assert_eq!(s.fix_hotkey, "ctrl+shift+space");
+        assert_eq!(s.quick_hotkey, "ctrl+space");
+        assert_ne!(s.fix_hotkey, s.quick_hotkey);
+    }
+
+    /// The defaults must be strings the global-shortcut plugin can actually
+    /// parse and register — a typo here would fail only at app startup.
+    #[test]
+    fn default_hotkeys_parse_as_registerable_shortcuts() {
+        Shortcut::from_str(DEFAULT_FIX_HOTKEY).unwrap();
+        Shortcut::from_str(DEFAULT_QUICK_HOTKEY).unwrap();
     }
 }

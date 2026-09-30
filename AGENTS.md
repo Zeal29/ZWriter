@@ -1,8 +1,9 @@
 # ZWriter — Project Rules & Knowledge
 
-System-wide, offline grammar fixer for Windows. Global hotkey (Ctrl+Alt+G)
-captures the selected text via a clipboard round-trip, fixes it with Harper
-(rules-based, no AI), shows a review window, and pastes the fix back into the
+System-wide, offline grammar fixer for Windows. Global hotkeys (defaults:
+Ctrl+Shift+Space fix-with-review, Ctrl+Space quick fix) capture the selected
+text via a clipboard round-trip, fix it with Harper
+(rules-based, no AI), show a review window, and paste the fix back into the
 app the user started in.
 
 ## Stack & vocabulary
@@ -155,11 +156,39 @@ app the user started in.
   environment, or filter ALL MSYS dirs from PATH: `/usr/bin`, `/bin`,
   `/mingw64/bin`, `/usr/local/bin`; `/bin` is a SYMLINK of `/usr/bin` in Git
   Bash so filtering `/usr/bin` alone still exposes Git's link.exe) — engine
-  unit tests.
+  unit tests. ALSO prepend `%USERPROFILE%\.cargo\bin` — cargo is NOT on the
+  default Git Bash PATH at all.
 - `scripts/smoke-test.ps1` — end-to-end UI test against a running app; see
   docs/SELF-TESTING.md.
 
 ## Verified / Questions / Assumptions
+
+**Verified (2026-09-30, tenth session — default hotkeys changed):**
+- Defaults are now **ctrl+shift+space** (fix with review) / **ctrl+space**
+  (quick fix): `flow.rs` DEFAULT_FIX_HOTKEY/DEFAULT_QUICK_HOTKEY,
+  Review.tsx initial chord state, types.ts comments, README.md. Existing
+  installs are unaffected — load_settings overlays saved settings.json over
+  the defaults; the user's own settings already held these chords.
+- `cargo test` 16/16 (new tests: default VALUES + `Shortcut::from_str` parse,
+  so a typo in the constants fails in unit tests, not at app startup).
+  Release rebuilt via build.bat (tsc+vite clean, cargo 4m11s).
+- Smoke suite **68/68** against the new build — it pins its own chords
+  (writes ctrl+alt+g/ctrl+alt+f settings explicitly at startup), restores
+  the user's settings and relaunches the app with them afterwards.
+- GitHub: pushed to main; v0.1.0 release assets replaced with `--clobber`
+  so new downloads carry the new defaults (version kept 0.1.0).
+
+**Verified (2026-09-29, ninth session — published to GitHub):**
+- Public repo **https://github.com/Zeal29/ZWriter** (main), MIT LICENSE,
+  full README (install/usage/how-it-works), Vite+Tauri .gitignore
+  (added missing `src-tauri/target/` + `gen/schemas/`). 53 files committed,
+  0 build dirs. Release **v0.1.0** carries the unsigned installer
+  (`ZWriter_0.1.0_x64-setup.exe`, 4.1 MB) + portable exe (12.6 MB);
+  README/SmartScreen note tells users More info → Run anyway.
+- Flow that worked from a non-git dir: `git init -b main` → add/commit →
+  `gh repo create ZWriter --public --source=. --push` → copy portable exe to
+  a release-named temp file → `gh release create v0.1.0 <assets> --notes`.
+- Secrets/path scan before push: only linguistic "token" comments; clean.
 
 **Verified (2026-09-29, eighth session — custom dictionary):**
 - Custom dictionary shipped end-to-end: `Settings.custom_words` (settings.json
