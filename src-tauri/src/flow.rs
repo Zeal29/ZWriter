@@ -47,6 +47,14 @@ pub struct HistoryEntry {
     pub applied: bool,
 }
 
+/// One user-taught abbreviation: trigger -> expansion.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Abbreviation {
+    pub trigger: String,
+    pub expansion: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -58,6 +66,14 @@ pub struct Settings {
     /// The user's custom dictionary: these words are never flagged as
     /// spelling errors (engine matches them case-insensitively).
     pub custom_words: Vec<String>,
+    /// User-taught trigger -> expansion pairs (engine matches triggers
+    /// case-/space-insensitively, one-letter-off as a GUESS).
+    pub abbreviations: Vec<Abbreviation>,
+    /// Exact tokens never flagged, never guessed, never suggested.
+    pub ignored_words: Vec<String>,
+    /// Quick fix opens the review window for guessed (one-edit-away)
+    /// abbreviations instead of pasting them. Ambiguous guesses always ask.
+    pub confirm_guesses: bool,
 }
 
 pub struct AppState {
@@ -94,7 +110,17 @@ pub fn default_settings() -> Settings {
         quick_hotkey: DEFAULT_QUICK_HOTKEY.to_string(),
         autostart: false,
         custom_words: Vec::new(),
+        abbreviations: Vec::new(),
+        ignored_words: Vec::new(),
+        confirm_guesses: true,
     }
+}
+
+/// "Nothing to do" for the UI's Apply gate and the quick path's silent
+/// return: the engine changed nothing AND no abbreviation guess is pending
+/// (a pending guess is exactly what the review window is for).
+pub fn no_change(fixed: &str, original: &str, lints: &[LintJson]) -> bool {
+    fixed == original && !lints.iter().any(|l| l.guessed)
 }
 
 /// Push to the history ring buffer (newest first).
@@ -158,9 +184,10 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
         return;
     }
 
-    // 3. Fix it.
+    // 3. Fix it. Review semantics: guesses are reported as lints, never
+    // applied here (apply_guesses=false); the quick path may re-run below.
     let fix_started = Instant::now();
-    let (fixed, lints) = state.engine.lock().unwrap().fix(&text);
+    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, false);
     let fix_ms = fix_started.elapsed().as_millis();
 
     let entry = HistoryEntry {
@@ -172,7 +199,7 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
     };
 
     let payload = FixReady {
-        no_change: fixed == text,
+        no_change: no_change(&fixed, &text, &lints),
         fix_ms,
         original: text,
         fixed: fixed.clone(),
@@ -181,26 +208,48 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
     };
 
     // 4. Quick path: paste straight back, no window. Clean text stays
-    // silent — no interruption when there is nothing to fix.
+    // silent — no interruption when there is nothing to fix. A GUESSED
+    // abbreviation is different: unless the user opted out (and the guess
+    // is unambiguous), the review window asks first (spec: option A).
     if quick {
-        if payload.no_change {
-            println!("[zwriter] text already clean, nothing to paste ({fix_ms}ms)");
+        let has_guess = payload.lints.iter().any(|l| l.guessed);
+        if !has_guess {
+            if payload.no_change {
+                println!("[zwriter] text already clean, nothing to paste ({fix_ms}ms)");
+                return;
+            }
+            store_pending(&state, &payload, target_hwnd, orig_clipboard);
+            paste_pending(&app);
+            let mut e = entry.clone();
+            e.applied = true;
+            push_history(&state, e);
             return;
         }
-        *state.pending.lock().unwrap() = Some(PendingFix {
-            original: payload.original.clone(),
-            fixed: payload.fixed.clone(),
-            lints: payload.lints.clone(),
-            fix_count: entry.fix_count,
-            user_edited: false,
-            target_hwnd,
-            orig_clipboard,
-        });
-        paste_pending(&app);
-        let mut e = entry.clone();
-        e.applied = true;
-        push_history(&state, e);
-        return;
+        if !confirm_guesses(&app) {
+            // Opted out: auto-apply unambiguous guesses. An ambiguous guess
+            // (one edit from TWO triggers) has no safe auto-answer — window.
+            let (fixed2, lints2) = state.engine.lock().unwrap().fix(&payload.original, true);
+            let ambiguous = lints2.iter().any(|l| l.guessed && l.suggestions.len() > 1);
+            if !ambiguous {
+                let payload2 = FixReady {
+                    no_change: no_change(&fixed2, &payload.original, &lints2),
+                    fix_ms,
+                    original: payload.original.clone(),
+                    fixed: fixed2.clone(),
+                    lints: lints2,
+                    user_edited: false,
+                };
+                store_pending(&state, &payload2, target_hwnd, orig_clipboard);
+                paste_pending(&app);
+                let mut e = entry.clone();
+                e.fixed = fixed2;
+                e.applied = true;
+                push_history(&state, e);
+                return;
+            }
+            // ambiguous -> fall through to the review window with payload
+        }
+        // confirm on (or ambiguous): fall through to the review window
     }
 
     push_history(&state, entry);
@@ -219,6 +268,25 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
         payload.lints.iter().map(|l| l.kind.as_str()).collect::<Vec<_>>()
     );
 
+    store_pending(&state, &payload, target_hwnd, orig_clipboard);
+}
+
+fn confirm_guesses(app: &AppHandle) -> bool {
+    app.state::<AppState>()
+        .settings
+        .lock()
+        .unwrap()
+        .confirm_guesses
+}
+
+/// Park the fix so Apply/paste can reach it later (quick path pastes at
+/// once; the review path waits for the user).
+fn store_pending(
+    state: &tauri::State<'_, AppState>,
+    payload: &FixReady,
+    target_hwnd: Option<isize>,
+    orig_clipboard: Option<String>,
+) {
     *state.pending.lock().unwrap() = Some(PendingFix {
         original: payload.original.clone(),
         fixed: payload.fixed.clone(),
@@ -336,5 +404,11 @@ mod tests {
     fn default_hotkeys_parse_as_registerable_shortcuts() {
         Shortcut::from_str(DEFAULT_FIX_HOTKEY).unwrap();
         Shortcut::from_str(DEFAULT_QUICK_HOTKEY).unwrap();
+    }
+
+    /// Option A is the default: quick fix asks before applying guesses.
+    #[test]
+    fn confirm_guesses_defaults_true() {
+        assert!(default_settings().confirm_guesses);
     }
 }

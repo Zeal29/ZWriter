@@ -18,7 +18,8 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use flow::{AppState, FixReady, HistoryEntry, LintPayload, Settings};
+use engine::canonical_trigger;
+use flow::{Abbreviation, AppState, FixReady, HistoryEntry, LintPayload, Settings};
 
 // ---------------------------------------------------------------------------
 // Settings persistence (app_config_dir/settings.json)
@@ -56,12 +57,54 @@ fn load_settings(app: &AppHandle) {
             .collect();
         dedup_words(&mut s.custom_words);
     }
+    if let Some(v) = saved.get("abbreviations").and_then(|v| v.as_array()) {
+        s.abbreviations = v
+            .iter()
+            .filter_map(|x| {
+                let t = x.get("trigger")?.as_str()?;
+                let e = x.get("expansion")?.as_str()?;
+                Some(Abbreviation {
+                    trigger: t.to_string(),
+                    expansion: e.to_string(),
+                })
+            })
+            .collect();
+        dedup_abbreviations(&mut s.abbreviations);
+    }
+    if let Some(v) = saved.get("ignoredWords").and_then(|v| v.as_array()) {
+        s.ignored_words = v
+            .iter()
+            .filter_map(|x| x.as_str())
+            .map(|x| x.trim().to_string())
+            .filter(|x| !x.is_empty())
+            .collect();
+        dedup_words(&mut s.ignored_words);
+    }
+    if let Some(v) = saved.get("confirmGuesses").and_then(|v| v.as_bool()) {
+        s.confirm_guesses = v;
+    }
 }
 
 /// Case-insensitive dedup, keeping the first (display) spelling.
 fn dedup_words(words: &mut Vec<String>) {
     let mut seen = std::collections::HashSet::new();
     words.retain(|w| seen.insert(w.to_lowercase()));
+}
+
+/// Dedup abbreviations by canonical trigger, keeping the LAST occurrence
+/// (a hand-edited settings.json's final entry wins, mirroring add's
+/// replace-on-same-trigger).
+fn dedup_abbreviations(abbrs: &mut Vec<Abbreviation>) {
+    let mut last: std::collections::HashMap<String, Abbreviation> = std::collections::HashMap::new();
+    let mut order: Vec<String> = Vec::new();
+    for a in abbrs.drain(..) {
+        let key = canonical_trigger(&a.trigger);
+        if !last.contains_key(&key) {
+            order.push(key.clone());
+        }
+        last.insert(key, a);
+    }
+    abbrs.extend(order.into_iter().filter_map(|k| last.remove(&k)));
 }
 
 fn save_settings(app: &AppHandle) {
@@ -72,6 +115,9 @@ fn save_settings(app: &AppHandle) {
         "fixHotkey": s.fix_hotkey,
         "quickHotkey": s.quick_hotkey,
         "customWords": s.custom_words,
+        "abbreviations": s.abbreviations,
+        "ignoredWords": s.ignored_words,
+        "confirmGuesses": s.confirm_guesses,
     });
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -91,6 +137,26 @@ fn apply_custom_words(app: &AppHandle) {
     };
     let state = app.state::<AppState>();
     state.engine.lock().unwrap().set_custom_words(&words);
+}
+
+/// Push the user's abbreviations + ignored words into the engine. Pure-Rust
+/// passes — no harper rebuild, so this is trivially cheap.
+fn apply_teachings(app: &AppHandle) {
+    let (abbrs, ignored) = {
+        let state = app.state::<AppState>();
+        let g = state.settings.lock().unwrap();
+        (
+            g.abbreviations
+                .iter()
+                .map(|a| (a.trigger.clone(), a.expansion.clone()))
+                .collect::<Vec<_>>(),
+            g.ignored_words.clone(),
+        )
+    };
+    let state = app.state::<AppState>();
+    let mut e = state.engine.lock().unwrap();
+    e.set_abbreviations(&abbrs);
+    e.set_ignored_words(&ignored);
 }
 
 /// (Re)register both hotkeys from the current settings. unregister_all is
@@ -131,9 +197,9 @@ pub struct PendingPayload {
 fn fix_text(text: String, app: AppHandle) -> Result<FixReady, String> {
     let state = app.state::<AppState>();
     let started = std::time::Instant::now();
-    let (fixed, lints) = state.engine.lock().unwrap().fix(&text);
+    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, false);
     Ok(FixReady {
-        no_change: fixed == text,
+        no_change: flow::no_change(&fixed, &text, &lints),
         fix_ms: started.elapsed().as_millis(),
         original: text,
         fixed,
@@ -153,7 +219,7 @@ fn fix_text(text: String, app: AppHandle) -> Result<FixReady, String> {
 fn update_pending(app: AppHandle, text: String) -> Result<FixReady, String> {
     let state = app.state::<AppState>();
     let started = std::time::Instant::now();
-    let (fixed, lints) = state.engine.lock().unwrap().fix(&text);
+    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, false);
     let has_pending = state.pending.lock().unwrap().is_some();
     if has_pending {
         if let Some(p) = state.pending.lock().unwrap().as_mut() {
@@ -174,7 +240,7 @@ fn update_pending(app: AppHandle, text: String) -> Result<FixReady, String> {
         }
     }
     Ok(FixReady {
-        no_change: fixed == text,
+        no_change: flow::no_change(&fixed, &text, &lints),
         fix_ms: started.elapsed().as_millis(),
         original: text,
         fixed,
@@ -287,6 +353,124 @@ fn remove_custom_word(app: AppHandle, word: String) -> Result<Vec<String>, Strin
     save_settings(&app);
     let _ = app.emit("custom-words-changed", serde_json::json!({ "words": words }));
     Ok(words)
+}
+
+/// Teach an abbreviation: `trigger` expands to `expansion` ("sc2" ->
+/// "StarCraft 2"). Same canonical trigger replaces the old expansion.
+#[tauri::command]
+fn add_abbreviation(
+    app: AppHandle,
+    trigger: String,
+    expansion: String,
+) -> Result<Vec<Abbreviation>, String> {
+    let trig = canonical_trigger(&trigger);
+    if !trig.chars().any(|c| c.is_alphanumeric()) {
+        return Err("type an abbreviation first".into());
+    }
+    let exp = expansion.trim().to_string();
+    if exp.is_empty() {
+        return Err("type the full term".into());
+    }
+    let list = {
+        let state = app.state::<AppState>();
+        let mut s = state.settings.lock().unwrap();
+        if let Some(existing) = s
+            .abbreviations
+            .iter_mut()
+            .find(|a| canonical_trigger(&a.trigger) == trig)
+        {
+            existing.expansion = exp;
+            existing.trigger = trigger.trim().to_string();
+        } else {
+            s.abbreviations.push(Abbreviation {
+                trigger: trigger.trim().to_string(),
+                expansion: exp,
+            });
+        }
+        s.abbreviations.clone()
+    };
+    apply_teachings(&app);
+    save_settings(&app);
+    // The review window may hold a live fix whose lints just changed.
+    let _ = app.emit("abbreviations-changed", serde_json::json!({ "abbreviations": list }));
+    Ok(list)
+}
+
+/// Remove an abbreviation by trigger (canonical compare). Idempotent.
+#[tauri::command]
+fn remove_abbreviation(app: AppHandle, trigger: String) -> Result<Vec<Abbreviation>, String> {
+    let target = canonical_trigger(&trigger);
+    let list = {
+        let state = app.state::<AppState>();
+        let mut s = state.settings.lock().unwrap();
+        s.abbreviations
+            .retain(|a| canonical_trigger(&a.trigger) != target);
+        s.abbreviations.clone()
+    };
+    apply_teachings(&app);
+    save_settings(&app);
+    let _ = app.emit("abbreviations-changed", serde_json::json!({ "abbreviations": list }));
+    Ok(list)
+}
+
+/// Ignore token(s): never flagged, never guessed, never suggested. Bulk
+/// add via whitespace split, like the custom dictionary.
+#[tauri::command]
+fn add_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, String> {
+    let new_words: Vec<String> = word
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !(c.is_alphanumeric() || c == '\'')))
+        .filter(|w| !w.is_empty())
+        .map(|w| w.to_string())
+        .collect();
+    if new_words.is_empty() {
+        return Err("type a token first".into());
+    }
+    let words = {
+        let state = app.state::<AppState>();
+        let mut s = state.settings.lock().unwrap();
+        for w in new_words {
+            if !s
+                .ignored_words
+                .iter()
+                .any(|x| x.to_lowercase() == w.to_lowercase())
+            {
+                s.ignored_words.push(w);
+            }
+        }
+        s.ignored_words.clone()
+    };
+    apply_teachings(&app);
+    save_settings(&app);
+    let _ = app.emit("ignored-words-changed", serde_json::json!({ "words": words }));
+    Ok(words)
+}
+
+/// Remove an ignored token (case-insensitive). Idempotent.
+#[tauri::command]
+fn remove_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, String> {
+    let target = word.trim().to_lowercase();
+    let words = {
+        let state = app.state::<AppState>();
+        let mut s = state.settings.lock().unwrap();
+        s.ignored_words.retain(|x| x.to_lowercase() != target);
+        s.ignored_words.clone()
+    };
+    apply_teachings(&app);
+    save_settings(&app);
+    let _ = app.emit("ignored-words-changed", serde_json::json!({ "words": words }));
+    Ok(words)
+}
+
+/// Option A <-> B toggle for the quick path's guessed abbreviations.
+#[tauri::command]
+fn set_confirm_guesses(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    {
+        let state = app.state::<AppState>();
+        state.settings.lock().unwrap().confirm_guesses = enabled;
+    }
+    save_settings(&app);
+    Ok(enabled)
 }
 
 #[tauri::command]
@@ -444,12 +628,18 @@ pub fn run() {
             set_hotkeys,
             add_custom_word,
             remove_custom_word,
+            add_abbreviation,
+            remove_abbreviation,
+            add_ignored_word,
+            remove_ignored_word,
+            set_confirm_guesses,
             open_settings,
             hide_settings
         ])
         .setup(|app| {
             load_settings(app.handle());
             apply_custom_words(app.handle());
+            apply_teachings(app.handle());
 
             // --- System tray -------------------------------------------------
             let show_i = MenuItem::with_id(app, "show", "Show ZWriter", true, None::<&str>)?;
