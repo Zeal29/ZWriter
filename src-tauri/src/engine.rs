@@ -754,6 +754,19 @@ mod tests {
         assert!(fixed.contains("StarCraft 2"), "apply_guesses=true must apply: {fixed:?}");
     }
 
+    /// The review path's pre-apply (auto-apply setting): fix(text, true)
+    /// applies the guess AND keeps the guessed lint in the list, so the
+    /// Original pane still highlights the word it replaced.
+    #[test]
+    fn preapplied_guess_stays_listed() {
+        let mut e = engine_with_abbrs(&[("sc2", "StarCraft 2")]);
+        let (fixed, lints) = e.fix("the se2 id", true);
+        assert_eq!(fixed, "the StarCraft 2 id");
+        let g = lints.iter().find(|l| l.guessed).expect("guessed lint must stay listed");
+        assert_eq!(g.kind, "AbbreviationGuess");
+        assert_eq!(g.suggestions, vec![Some("StarCraft 2".to_string())]);
+    }
+
     #[test]
     fn transposition_counts_as_one_edit() {
         let mut e = engine_with_abbrs(&[("sc2", "StarCraft 2")]);

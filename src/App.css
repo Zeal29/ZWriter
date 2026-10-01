@@ -198,6 +198,20 @@ mark {
   outline: 1px dashed var(--accent);
 }
 
+/* A TAUGHT/confirmed abbreviation (exact match): green solid underline, no
+   error background — a third look, distinct from errors (amber) and guesses
+   (violet dashed), so every highlight is identifiable at a glance. */
+.text.original button.word.err.abbr {
+  background: none;
+  color: var(--green);
+  text-decoration: underline solid;
+  text-underline-offset: 3px;
+}
+
+.text.original button.word.err.abbr:hover {
+  outline: 1px solid var(--green);
+}
+
 /* word picker popover (anchored inside the original pane) */
 
 .pop-backdrop {
@@ -564,15 +578,36 @@ button.linklike:hover {
   color: var(--text-dim);
 }
 
-.wordpop .wordpop-hint {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--accent);
-}
-
 .wordpop .dict-add:hover {
   border-color: var(--accent);
   color: var(--accent-hover);
+}
+
+/* teach-abbreviation sub-form (swaps the popover content) */
+.wordpop .wordpop-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.teach-form input {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  user-select: text;
+}
+
+.teach-form input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .about {

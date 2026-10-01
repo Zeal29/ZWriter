@@ -190,7 +190,8 @@ pub struct PendingPayload {
 fn fix_text(text: String, app: AppHandle) -> Result<FixReady, String> {
     let state = app.state::<AppState>();
     let started = std::time::Instant::now();
-    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, false);
+    let auto = state.settings.lock().unwrap().auto_apply_guesses;
+    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, auto);
     Ok(FixReady {
         no_change: flow::no_change(&fixed, &text, &lints),
         fix_ms: started.elapsed().as_millis(),
@@ -212,7 +213,8 @@ fn fix_text(text: String, app: AppHandle) -> Result<FixReady, String> {
 fn update_pending(app: AppHandle, text: String) -> Result<FixReady, String> {
     let state = app.state::<AppState>();
     let started = std::time::Instant::now();
-    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, false);
+    let auto = state.settings.lock().unwrap().auto_apply_guesses;
+    let (fixed, lints) = state.engine.lock().unwrap().fix(&text, auto);
     let has_pending = state.pending.lock().unwrap().is_some();
     if has_pending {
         if let Some(p) = state.pending.lock().unwrap().as_mut() {

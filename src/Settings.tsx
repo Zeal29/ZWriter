@@ -455,10 +455,10 @@ function Settings() {
 
       <section className="setting-row">
         <div>
-          <strong>Quick fix: auto-apply unsure abbreviations</strong>
+          <strong>Auto-apply unsure abbreviations</strong>
           <p className="sub">
-            Use the guessed expansion without asking; when the review window
-            opens, it is already applied
+            Use the guessed expansion without asking — in the review window
+            (already applied) and in quick fix (pasted straight away)
           </p>
         </div>
         <input

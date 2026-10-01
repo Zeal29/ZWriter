@@ -110,9 +110,9 @@ For development with hot reload: `scripts\dev.bat`.
 | Fix instantly | Select text → `Ctrl+Space` |
 | Skip a suggestion | `Esc` or the **Skip** button |
 | Whitelist a word | Click the flagged word → **+ Add to dictionary** |
-| Teach an abbreviation | Click a word → type the full term in the box → **+ Add as abbreviation** (or Settings → Abbreviations) |
+| Teach an abbreviation | Click a word → **+ Add as abbreviation** → type the full term → **Add abbreviation** (or Settings → Abbreviations) |
 | Ignore a code/ID | Click the word → **+ Ignore word** (session-only; or Settings → Ignored words) |
-| Quick fix & guesses | Exact abbreviations paste instantly. Unsure near-matches follow two Settings checkboxes: *skip unsure* (no review window) and *auto-apply unsure* (use the expansion anyway) |
+| Quick fix & guesses | Exact abbreviations paste instantly. Unsure near-matches follow two Settings checkboxes: *skip unsure* (quick fix: no review window) and *auto-apply unsure* (use the expansion anyway — in the review window too, pre-applied). Errors, guesses, and confirmed abbreviations each get their own highlight color |
 | Replace a word manually | Click any word → pick a suggestion or type your own |
 | Change hotkeys | Settings (gear icon, tray menu, or `Ctrl+,` in the review window) |
 | Quit | Tray icon → **Quit** |

@@ -14,9 +14,10 @@
 #   J. Abbreviations + ignored words + guess checkboxes taught in Settings
 #   K. Exact abbreviation: review shows the expansion, Apply pastes it
 #   L. Quick fix, exact abbreviation: pastes instantly, no window
-#   M. Quick fix x guess checkboxes: the full 2x2 matrix + ambiguous carve-out
-#   N. Popover teach: "Add as abbreviation" from the word popover,
-#      "Ignore word" unflags live
+#   M. Quick fix x guess checkboxes: the full 2x2 matrix + ambiguous
+#      carve-out + auto-apply pre-applies in the NORMAL review window too
+#   N. Popover teach: "Add as abbreviation" opens a sub-form (trigger shown,
+#      type the expansion, Add / Cancel); "Ignore word" unflags live
 #   C. Rebind: Settings UI record Ctrl+Alt+J -> old chord dead, new works,
 #      review-window hotkey hint text follows the rebind
 #   D. Rebind back to Ctrl+Alt+G and verify
@@ -822,6 +823,23 @@ Show-Above $zw
 Start-Sleep -Milliseconds 500
 Check "M16 row3: guess pre-applied in fixed pane" (Has-Text $zw "*StarCraft 2*")
 Dismiss-Review
+# auto-apply ALSO governs the normal review hotkey (not just quick fix):
+# the window still opens - that is what the review chord is for - but the
+# guess arrives pre-applied.
+$np = New-Selection "the se2 normal review"
+[System.Windows.Forms.SendKeys]::SendWait("^%g")
+Un-Top $np.MainWindowHandle
+$zw = Wait-Window "ZWriter" 6
+if ($zw -eq [IntPtr]::Zero) {
+    Step "Mg capture race - retrying once"
+    [System.Windows.Forms.SendKeys]::SendWait("^%g")
+    $zw = Wait-Window "ZWriter" 10
+}
+Check "M22 normal review: window opens with auto-apply" ($zw -ne [IntPtr]::Zero)
+Show-Above $zw
+Start-Sleep -Milliseconds 500
+Check "M23 normal review: guess pre-applied too" (Has-Text $zw "*StarCraft 2*")
+Dismiss-Review
 # row 4 (off,off): defaults - window, chip, NOT applied
 Anchor-Settings "anchor m row four settings"
 Check "M17 checkbox2 to OFF (defaults)" (Set-Checkbox $st "Auto-apply unsure abbreviations" "Off")
@@ -868,15 +886,23 @@ Show-Above $zw
 Start-Sleep -Milliseconds 500
 Check "N2 guessed word se2 clicked" (Click-Button $zw "word: se2")
 Check "N3 Add-as-abbreviation button offered" (Has-Button $zw "Add as abbreviation")
-Check "N3b Add-as-abbreviation stays enabled before typing" (Test-Button-Enabled $zw "Add as abbreviation")
-Check "N4 word editor focused" (Click-Edit $zw "Edit word")
+Check "N3b button enabled before typing" (Test-Button-Enabled $zw "Add as abbreviation")
+Check "N4 teach sub-form opens" (Click-Button $zw "Add as abbreviation")
+Start-Sleep -Milliseconds 500
+Check "N4b sub-form shows the trigger prompt" (Has-Text $zw "*replace it with*")
+Check "N4c Cancel returns to the popover" (Click-Button $zw "Cancel abbreviation")
+Start-Sleep -Milliseconds 400
+Check "N4d popover back after cancel" (Has-Button $zw "Add as abbreviation")
+Check "N5 teach sub-form re-opened" (Click-Button $zw "Add as abbreviation")
+Start-Sleep -Milliseconds 500
+Check "N6 expansion field focused" (Click-Edit $zw "Expansion term")
 [System.Windows.Forms.SendKeys]::SendWait("^a")
 Start-Sleep -Milliseconds 200
 [System.Windows.Forms.SendKeys]::SendWait("Sea Extra 2")
 Start-Sleep -Milliseconds 300
-Check "N5 Add-as-abbreviation clicked" (Click-Button $zw "Add as abbreviation")
+Check "N7 Add abbreviation clicked" (Click-Button $zw "Add abbreviation")
 Start-Sleep -Milliseconds 1500
-Check "N6 fixed pane shows the taught expansion" (Has-Text $zw "*Sea Extra 2*")
+Check "N8 fixed pane shows the taught expansion" (Has-Text $zw "*Sea Extra 2*")
 Dismiss-Review
 # Ignore-word button: a flagged word, ignored live from the popover.
 # "mistkae" on purpose: "thiss" is still in the custom dictionary from
@@ -894,15 +920,15 @@ if ($zw -eq [IntPtr]::Zero) {
     [System.Windows.Forms.SendKeys]::SendWait("^%g")
     $zw = Wait-Window "ZWriter" 10
 }
-Check "N7 review window for ignore flow" ($zw -ne [IntPtr]::Zero)
-Check "N8 word flagged before ignore (1 issue)" (Has-Text $zw "*1 issue*")
+Check "N9 review window for ignore flow" ($zw -ne [IntPtr]::Zero)
+Check "N10 word flagged before ignore (1 issue)" (Has-Text $zw "*1 issue*")
 Show-Above $zw
 Start-Sleep -Milliseconds 300
-Check "N9 flagged word clicked" (Click-Button $zw "word: mistkae")
-Check "N10 Ignore-word button offered" (Has-Button $zw "Ignore word")
-Check "N11 Ignore-word clicked" (Click-Button $zw "Ignore word")
+Check "N11 flagged word clicked" (Click-Button $zw "word: mistkae")
+Check "N12 Ignore-word button offered" (Has-Button $zw "Ignore word")
+Check "N13 Ignore-word clicked" (Click-Button $zw "Ignore word")
 Start-Sleep -Milliseconds 1500
-Check "N12 mistkae unflagged live (1 -> 0 issues)" (Has-Text $zw "*0 issue*")
+Check "N14 mistkae unflagged live (1 -> 0 issues)" (Has-Text $zw "*0 issue*")
 Dismiss-Review
 
 # ---- C. rebind fix hotkey Ctrl+Alt+G -> Ctrl+Alt+J via Settings ----
@@ -1018,7 +1044,7 @@ $fixReady = ([regex]::Matches($logText, "fix ready")).Count
 $pasted = ([regex]::Matches($logText, "pasted fix")).Count
 $noCapture = ([regex]::Matches($logText + " " + $errText, "no text captured")).Count
 $clean = ([regex]::Matches($logText, "already clean")).Count
-Check "L1 fix-ready count = 20" ($fixReady -eq 20)
+Check "L1 fix-ready count = 21" ($fixReady -eq 21)
 Check "L2 pasted count = 9" ($pasted -eq 9)
 Check "L3 no failed captures" ($noCapture -eq 0)
 Check "L4 no unexpected clean-skips" ($clean -eq 0)

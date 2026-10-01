@@ -1,7 +1,7 @@
 # ZWriter v0.2 — Abbreviations, Ignored Words & the Alphanumeric Rule
 
 Design spec — 2026-09-30, revised 2026-10-01 after first user feedback.
-Status: implemented; see §Revision 1 for the changes that supersede the
+Status: implemented; see §Revision 1 and §Revision 2 for changes that supersede the
 original quick-path and ignore-list design.
 
 ## Problem
@@ -288,6 +288,29 @@ exe, settings backed up/restored as today:
    pasting would otherwise eat the user's clipboard content.
 
 
+
+## Revision 2 (2026-10-01, second user feedback — supersedes parts of Revision 1)
+
+1. **`autoApplyGuesses` governs BOTH hotkeys, not just quick fix.** With it
+   on, the review window opens with unambiguous guesses already applied
+   (same as quick-fix row 3); ambiguous guesses stay chips and always open
+   the window. `skipGuessWindow` stays quick-fix-only — the review hotkey
+   is an explicit "open the window" command, so it never skips. The
+   pre-apply moved ahead of the quick/review fork in `capture_and_fix`
+   (step 4), and `fix_text`/`update_pending` now also pass the setting so
+   popover edits and re-runs behave identically.
+2. **Three distinct highlights.** Normal engine errors keep the amber
+   highlight; GUESSED abbreviations get the violet dashed underline; exact
+   (taught/confirmed) abbreviations get a green solid underline
+   (`.word.abbr`), derived from the lint kind — so all three error classes
+   are identifiable at a glance. Abbreviation tooltips/popover lines no
+   longer double the kind prefix ("Abbreviation: Abbreviation: ...").
+3. **Teach-abbreviation sub-form.** "+ Add as abbreviation" swaps the
+   popover for a small form: the trigger is displayed, one field takes the
+   full term (autofocused), and two buttons — **Add abbreviation** /
+   **Cancel** (Cancel returns to the popover; Esc backs out of the form
+   first). Revision 1's "click the button again" hint is gone — no more
+   fighting the Replace box mid-teach.
 
 ## Risks / open points
 

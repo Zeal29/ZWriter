@@ -73,10 +73,11 @@ pub struct Settings {
     /// SESSION-ONLY: never persisted, empty on every launch — for one-off
     /// codes, not vocabulary (that is what custom_words is for).
     pub ignored_words: Vec<String>,
-    /// Quick fix + a GUESSED abbreviation (one-edit-away, low confidence):
-    /// skip_guess_window = never open the review window for it;
-    /// auto_apply_guesses = apply the guessed expansion anyway. Defaults
-    /// false/false = open the window and show the guess as a chip.
+    /// Unsure (guessed) abbreviations, checkbox 1 — quick fix only: skip the
+    /// review window for them. Checkbox 2 applies to BOTH hotkeys:
+    /// auto_apply_guesses = apply the guessed expansion anyway (pasted
+    /// directly, or pre-applied when the window opens). Defaults false/false
+    /// = open the window and show the guess as a chip.
     pub skip_guess_window: bool,
     pub auto_apply_guesses: bool,
 }
@@ -214,7 +215,34 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
         user_edited: false,
     };
 
-    // 4. Quick path: paste straight back, no window. Clean text stays
+    // 4. Checkbox 2 (auto-apply unsure abbreviations) governs BOTH hotkeys,
+    // not just quick fix: with it on, unambiguous guesses are pre-applied
+    // whether the fix pastes straight back (quick) or opens the review
+    // window. Ambiguous guesses (one edit from 2+ triggers) are never
+    // pre-applied — several answers is not "low confidence", it is no
+    // answer — they stay chips and open the window.
+    let (skip_window, auto_apply) = guess_settings(&app);
+    let has_guess = payload.lints.iter().any(|l| l.guessed);
+    let ambiguous = payload
+        .lints
+        .iter()
+        .any(|l| l.guessed && l.suggestions.len() > 1);
+    if has_guess && auto_apply && !ambiguous {
+        println!("[zwriter] auto-apply: unsure guesses pre-applied (ambiguous={ambiguous})");
+        let (fixed2, lints2) = state.engine.lock().unwrap().fix(&payload.original, true);
+        payload = FixReady {
+            no_change: no_change(&fixed2, &payload.original, &lints2),
+            fix_ms,
+            original: payload.original,
+            fixed: fixed2.clone(),
+            lints: lints2,
+            user_edited: false,
+        };
+        entry.fixed = fixed2;
+        entry.fix_count = payload.lints.len();
+    }
+
+    // 5. Quick path: paste straight back, no window. Clean text stays
     // silent — no interruption when there is nothing to fix. A GUESSED
     // abbreviation is governed by TWO settings (the 2x2 matrix):
     //   skip_guess_window  auto_apply_guesses   quick-fix behavior
@@ -222,10 +250,9 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
     //   true               false                keep the word, silently
     //   true               true                 apply + paste, no window
     //   false              true                 window opens, guess pre-applied
-    // Ambiguous guesses (one edit from 2+ triggers) ALWAYS open the window
-    // as chips — several answers is not "low confidence", it is no answer.
+    // The review hotkey always opens the window (that is what it is for);
+    // auto_apply just decides whether guesses arrive pre-applied.
     if quick {
-        let has_guess = payload.lints.iter().any(|l| l.guessed);
         if !has_guess {
             if payload.no_change {
                 println!("[zwriter] text already clean, nothing to paste ({fix_ms}ms)");
@@ -238,11 +265,6 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
             push_history(&state, entry);
             return;
         }
-        let (skip_window, auto_apply) = guess_settings(&app);
-        let ambiguous = payload
-            .lints
-            .iter()
-            .any(|l| l.guessed && l.suggestions.len() > 1);
         println!(
             "[zwriter] quick: guess pending, skip_window={skip_window} auto_apply={auto_apply} ambiguous={ambiguous}"
         );
@@ -252,39 +274,14 @@ pub fn capture_and_fix(app: AppHandle, quick: bool) {
                 restore_clipboard(&app, &orig_clipboard);
                 return;
             }
-            // Apply the guess and paste, no questions.
-            let (fixed2, lints2) = state.engine.lock().unwrap().fix(&payload.original, true);
-            payload = FixReady {
-                no_change: no_change(&fixed2, &payload.original, &lints2),
-                fix_ms,
-                original: payload.original,
-                fixed: fixed2.clone(),
-                lints: lints2,
-                user_edited: false,
-            };
-            entry.fixed = fixed2;
-            entry.fix_count = payload.lints.len();
+            // The guess was already applied in step 4 — paste it, no questions.
             store_pending(&state, &payload, target_hwnd, orig_clipboard);
             paste_pending(&app);
             entry.applied = true;
             push_history(&state, entry);
             return;
         }
-        if auto_apply && !ambiguous {
-            // Window opens with the guess ALREADY applied (review, then keep).
-            let (fixed2, lints2) = state.engine.lock().unwrap().fix(&payload.original, true);
-            payload = FixReady {
-                no_change: no_change(&fixed2, &payload.original, &lints2),
-                fix_ms,
-                original: payload.original,
-                fixed: fixed2.clone(),
-                lints: lints2,
-                user_edited: false,
-            };
-            entry.fixed = fixed2;
-            entry.fix_count = payload.lints.len();
-        }
-        // else: fall through with the chip payload (window path, rows 3-4).
+        // else: fall through to the window (pre-applied if auto_apply).
     }
 
     push_history(&state, entry);

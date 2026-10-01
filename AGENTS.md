@@ -51,12 +51,15 @@ app the user started in.
   position — `sc3` is never StarCraft 2); a guess is a suggestion chip,
   never auto-applied by the engine. **Ambiguous guess** (one edit from 2+
   triggers) ALWAYS opens the review window under every setting combination.
-- **Guess checkboxes** = TWO settings governing the QUICK path only
-  (`skipGuessWindow` / `skip_guess_window`, `autoApplyGuesses` /
-  `auto_apply_guesses`, both default off). Matrix: (off,off) window + chip;
-  (on,off) word left as typed, silently; (on,on) apply + paste, no window;
-  (off,on) window with the guess pre-applied. Replaced `confirmGuesses`
-  (old key ignored + dropped on next save).
+- **Guess checkboxes** = TWO settings (`skipGuessWindow` /
+  `skip_guess_window`, `autoApplyGuesses` / `auto_apply_guesses`, both
+  default off). `skipGuessWindow` is QUICK-only (the review hotkey is an
+  explicit "open the window", it never skips); `autoApplyGuesses` governs
+  BOTH hotkeys. Quick matrix: (off,off) window + chip; (on,off) word left
+  as typed, silently; (on,on) apply + paste, no window; (off,on) window
+  with the guess pre-applied. Review + auto-apply: window opens with the
+  guess pre-applied. Ambiguous guesses always open the window as chips.
+  Replaced `confirmGuesses` (old key ignored + dropped on next save).
 - **Ignored word** = exact token (SESSION-ONLY `Settings.ignored_words`,
   NEVER persisted, empty every launch) never flagged, never guessed, never
   suggested — for one-off codes/IDs; permanent vocabulary belongs in the
@@ -67,13 +70,20 @@ app the user started in.
 - **abbreviations-changed** / **ignored-words-changed** = broadcast events
   from the add/remove commands; Review.tsx re-runs the engine, Settings.tsx
   live-syncs (same pattern as custom-words-changed).
-- **Popover teach buttons** = "+ Add as abbreviation" (trigger = picked
-  word, expansion = the popover's edit box ABOVE the buttons; clicking it
-  with no full term focuses the box + shows a hint — never disabled-silent)
-  and "+ Ignore word" (session-only) next to "+ Add to dictionary".
+- **Popover teach buttons** = "+ Add as abbreviation" OPENS THE TEACH
+  SUB-FORM (popover content swaps: trigger displayed, one autofocused
+  "Expansion term" input, **Add abbreviation** / **Cancel**; Cancel or Esc
+  returns to the popover) and "+ Ignore word" (session-only) next to
+  "+ Add to dictionary". The old "type in the edit box, click the button
+  again" flow is gone — it fought the Replace box (user feedback).
 - **word.guess** = CSS class on guessed-lint tokens: dashed violet
   underline, no error background — an unsure match must not look like a
   correction.
+- **word.abbr** = CSS class on EXACT (taught) abbreviation tokens: green
+  solid underline, no error background. Three highlight classes total —
+  errors (amber bg) / guesses (violet dashed) / confirmed abbreviations
+  (green solid) — derived from the lint kind, so every highlight is
+  identifiable at a glance.
 
 ## Non-obvious rules (learned the hard way)
 
@@ -195,6 +205,14 @@ app the user started in.
     Ctrl+C, so returning without pasting silently eats the user's
     clipboard content (the "already clean" path had this bug too; found
     while adding the skip-guess row).
+26. **Win11 `Start-Process notepad -PassThru` hands back a PID that exits**
+    (classic notepad.exe hands off to the Store app) — the next
+    `Get-Process -Id` throws. Launch via the full path
+    (`$env:SystemRoot\System32
+otepad.exe`), then find the real process
+    with `Get-Process notepad | ? MainWindowHandle -ne 0`. Also: a
+    notepad document is NOT clean on launch (Win11 restores session tabs)
+    — clear it (^a, {DEL}) before pasting test text.
 
 ## Knowledge sources
 
@@ -221,6 +239,40 @@ app the user started in.
   docs/SELF-TESTING.md.
 
 ## Verified / Questions / Assumptions
+
+**Verified (2026-10-01, thirteenth session — second user-feedback round):**
+- Fix 1 (auto-apply governs BOTH hotkeys): the guess pre-apply moved ahead
+  of the quick/review fork in `capture_and_fix` (gated on
+  `has_guess && auto_apply && !ambiguous`); `fix_text`/`update_pending`
+  pass `settings.auto_apply_guesses` so popover edits and re-runs behave
+  identically. `skipGuessWindow` stays quick-only (the review hotkey is an
+  explicit "open the window"). New engine test
+  `preapplied_guess_stays_listed` (fix(true) applies AND keeps the guessed
+  lint listed, so the highlight survives pre-apply). Smoke M22-M23: normal
+  chord with auto-apply on opens the window WITH "StarCraft 2" pre-applied.
+- Fix 2 (three highlights): OriginalText derives the class from the lint
+  KIND — `.word.err` (amber bg, harper errors) / `.word.err.guess` (violet
+  dashed) / `.word.err.abbr` (green solid, exact abbreviations); tooltips
+  and popover lines no longer double the kind prefix
+  ("Abbreviation: Abbreviation: ..."). Verified by screenshot
+  (`scripts/color-check.ps1` -> colors-check.png): beleive=amber bg,
+  sc2=green underline, se2=violet dashed, all in one review window.
+- Fix 3 (teach sub-form): "+ Add as abbreviation" swaps the popover for a
+  form — trigger shown, autofocused "Expansion term" input, Add
+  abbreviation / Cancel (Cancel or Esc returns to the popover); teachMode
+  resets on fix-ready/apply/dismiss/pick so the next popover never opens
+  mid-teach. Smoke N4-N8 drive it end-to-end (open, prompt shown, cancel,
+  re-open, type, Add, fixed pane shows "Sea Extra 2").
+- `cargo test` **32/32**; `pnpm build` green; release + NSIS rebuilt
+  (3m05s). Smoke suite **135/135** on the first run of the new build
+  (M22-M23 + N3b-N8 new; log invariants L1 fix-ready=21, L2 pasted=9,
+  L3/L4 clean). User settings backed up + restored by BOTH the suite and
+  color-check (their own sc2/ie/rts abbreviations and checkbox states
+  intact); new release exe left running.
+- color-check.ps1 lessons (rule 26): Win11 `Start-Process notepad
+  -PassThru` returns a dying PID; PS 5.1 `Set-Content -Encoding UTF8`
+  writes a BOM that serde_json rejects — write BOM-less via
+  `[IO.File]::WriteAllText`.
 
 **Verified (2026-10-01, twelfth session — user-feedback fixes):**
 - Fix 1 (session-only ignores): `ignoredWords` removed from load_settings

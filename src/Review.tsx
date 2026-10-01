@@ -86,12 +86,19 @@ function OriginalText({
       }
     }
     const word = text.slice(s, e);
+    // Three visually distinct highlights: normal engine error (amber),
+    // GUESSED abbreviation (violet dashed), taught/confirmed abbreviation
+    // (green solid). Abbreviation messages already name their kind.
+    const abbrKind = best?.kind === "Abbreviation" || best?.kind === "AbbreviationGuess";
+    const msg = best ? (abbrKind ? best.message : `${best.kind}: ${best.message}`) : null;
     nodes.push(
       <button
         key={key++}
         type="button"
-        className={`word${best ? " err" : ""}${best?.guessed ? " guess" : ""}`}
-        title={best ? `${best.kind}: ${best.message}` : "Click to fix or edit this word"}
+        className={`word${best ? " err" : ""}${
+          best?.kind === "AbbreviationGuess" ? " guess" : best?.kind === "Abbreviation" ? " abbr" : ""
+        }`}
+        title={msg ?? "Click to fix or edit this word"}
         aria-label={`word: ${word}`}
         onClick={(ev) =>
           onPick(
@@ -100,7 +107,7 @@ function OriginalText({
               spanEnd: best ? best.u16end : e,
               word,
               suggestions: best?.suggestions ?? [],
-              message: best ? `${best.kind}: ${best.message}` : null,
+              message: msg,
             },
             ev.currentTarget,
           )
@@ -125,12 +132,19 @@ function Review() {
   const [quickChord, setQuickChord] = useState("ctrl+space");
   const [picked, setPicked] = useState<WordPick | null>(null);
   const [editVal, setEditVal] = useState("");
-  const [abbrHint, setAbbrHint] = useState("");
+  // Teach-abbreviation sub-form: swaps the popover content for a small
+  // "trigger -> expansion" form (Add / Cancel) so the flow never asks the
+  // user to click the same button twice or fight the Replace box.
+  const [teachMode, setTeachMode] = useState(false);
+  const [abbrVal, setAbbrVal] = useState("");
+  const abbrRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<FixReady | null>(null);
   pendingRef.current = fix;
   const pickedRef = useRef<WordPick | null>(null);
   pickedRef.current = picked;
+  const teachRef = useRef(false);
+  teachRef.current = teachMode;
   // fix_text (no pending in Rust) for the self-test demo, update_pending for
   // real captures — editing demo text must not clobber a live pending fix.
   const fromCaptureRef = useRef(false);
@@ -149,6 +163,7 @@ function Review() {
       fromCaptureRef.current = true;
       editedRef.current = false;
       setPicked(null);
+      setTeachMode(false);
       setFix(e.payload);
       refreshHistory();
     });
@@ -200,12 +215,14 @@ function Review() {
     invoke("apply_paste").catch(() => {});
     setStatus("Pasted into your app.");
     setPicked(null);
+    setTeachMode(false);
     setFix(null);
   }, []);
 
   const dismiss = useCallback(() => {
     invoke("dismiss_fix").catch(() => {});
     setPicked(null);
+    setTeachMode(false);
     setFix(null);
   }, []);
 
@@ -227,7 +244,13 @@ function Review() {
       }
       if (e.key === "Escape" && pickedRef.current) {
         e.preventDefault();
-        setPicked(null);
+        // Esc in the teach form backs out to the popover first; a second
+        // Esc closes the popover.
+        if (teachRef.current) {
+          setTeachMode(false);
+        } else {
+          setPicked(null);
+        }
         return;
       }
       if (!pendingRef.current) return;
@@ -253,7 +276,8 @@ function Review() {
     const top = tr.bottom - pr.top + 6;
     setPicked({ ...p, left, top });
     setEditVal(p.word);
-    setAbbrHint("");
+    setTeachMode(false);
+    setAbbrVal("");
   }, []);
 
   /** Replace the picked span (null = remove it) and re-run the engine live. */
@@ -263,6 +287,7 @@ function Review() {
       const p = pickedRef.current;
       if (!f || !p) return;
       setPicked(null);
+      setTeachMode(false);
       const next = f.original.slice(0, p.spanStart) + (replacement ?? "") + f.original.slice(p.spanEnd);
       if (next === f.original) return;
       editedRef.current = true;
@@ -305,28 +330,36 @@ function Review() {
       .catch((e) => setStatus(`Could not add word: ${e}`));
   }, []);
 
-  /** Teach an abbreviation: the picked word is the trigger, the popover's
-   *  edit box holds the full term. The button is always responsive — with
-   *  no full term typed it focuses the box and says so instead of silently
-   *  doing nothing. The engine re-run comes from the abbreviations-changed
-   *  event the command emits. */
-  const addAsAbbreviation = useCallback(() => {
+  /** Teach an abbreviation, step 1: swap the popover for the teach form —
+   *  the picked word is the trigger (already written), the user only types
+   *  the full term. No double-clicking the entry button, no Replace box in
+   *  the way. */
+  const openTeach = useCallback(() => {
+    if (!pickedRef.current) return;
+    setAbbrVal("");
+    setTeachMode(true);
+  }, []);
+
+  /** Step 2, Add: teach trigger -> expansion. The engine re-run comes from
+   *  the abbreviations-changed event the command emits. */
+  const commitTeach = useCallback(() => {
     const p = pickedRef.current;
-    if (!p) return;
+    const expansion = abbrVal.trim();
+    if (!p || !expansion) return;
     const trigger = stripWord(p.word);
-    const expansion = editVal.trim();
     if (!trigger) return;
-    if (!expansion || expansion === p.word.trim()) {
-      setAbbrHint("Type the full term in the box above, then click here again.");
-      editRef.current?.focus();
-      return;
-    }
     setPicked(null);
-    setAbbrHint("");
+    setTeachMode(false);
     invoke("add_abbreviation", { trigger, expansion })
       .then(() => setStatus(`"${trigger}" now expands to "${expansion}".`))
       .catch((e) => setStatus(`Could not add abbreviation: ${e}`));
-  }, [editVal]);
+  }, [abbrVal]);
+
+  /** Step 2, Cancel: back to the popover as it was. */
+  const cancelTeach = useCallback(() => {
+    setTeachMode(false);
+    setAbbrVal("");
+  }, []);
 
   /** Ignore this exact token: never flagged, never guessed, never suggested. */
   const ignoreWord = useCallback(() => {
@@ -351,6 +384,7 @@ function Review() {
         fromCaptureRef.current = false;
         editedRef.current = false;
         setPicked(null);
+        setTeachMode(false);
         setFix(r);
         setStatus(`Engine: ${r.lints.length} lints in ${r.fixMs}ms`);
       })
@@ -399,74 +433,122 @@ function Review() {
                   aria-label="Word suggestions"
                   style={{ left: picked.left, top: picked.top, width: Math.min(300, (paneRef.current?.clientWidth ?? 300) - 16) }}
                 >
-                  <p className="wordpop-msg">
-                    {picked.message ?? "No engine issue in this word — you can still replace it."}
-                  </p>
-                  {picked.suggestions.length > 0 && (
-                    <div className="chips">
-                      {picked.suggestions.map((s, i) => (
+                  {teachMode ? (
+                    <div className="teach-form">
+                      <p className="wordpop-title">Teach abbreviation</p>
+                      <p className="wordpop-msg">
+                        When I type <strong>{stripWord(picked.word)}</strong>, replace it with:
+                      </p>
+                      <input
+                        ref={abbrRef}
+                        autoFocus
+                        aria-label="Expansion term"
+                        placeholder="the full term, e.g. StarCraft 2"
+                        value={abbrVal}
+                        onChange={(e) => setAbbrVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            commitTeach();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cancelTeach();
+                          }
+                        }}
+                      />
+                      <div className="wordpop-row">
                         <button
-                          key={i}
                           type="button"
-                          aria-label={s === null ? "Remove word" : `suggestion: ${s}`}
-                          onClick={() => commitWord(s)}
+                          className="primary"
+                          aria-label="Add abbreviation"
+                          disabled={!abbrVal.trim()}
+                          onClick={commitTeach}
                         >
-                          {s === null ? "(remove)" : s}
+                          Add abbreviation
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          className="ghost"
+                          aria-label="Cancel abbreviation"
+                          onClick={cancelTeach}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  {abbrHint && <p className="wordpop-hint">{abbrHint}</p>}
-                  <div className="wordpop-row">
-                    <input
-                      ref={editRef}
-                      aria-label="Edit word"
-                      value={editVal}
-                      onChange={(e) => setEditVal(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          commitEdit();
-                        }
-                      }}
-                    />
-                    <button type="button" aria-label="Replace word" onClick={commitEdit}>
-                      Replace
-                    </button>
-                  </div>
-                  {picked.message && stripWord(picked.word) && (
-                    <button
-                      type="button"
-                      className="dict-add"
-                      aria-label="Add to dictionary"
-                      title="Never flag this word again"
-                      onClick={addToDictionary}
-                    >
-                      + Add to dictionary
-                    </button>
-                  )}
-                  {stripWord(picked.word) && (
-                    <button
-                      type="button"
-                      className="dict-add"
-                      aria-label="Add as abbreviation"
-                      title="Turn this word into a shortcut for the term in the box above"
-                      onClick={addAsAbbreviation}
-                    >
-                      + Add as abbreviation
-                    </button>
-                  )}
-                  {stripWord(picked.word) && (
-                    <button
-                      type="button"
-                      className="dict-add"
-                      aria-label="Ignore word"
-                      title="Never flag or suggest this token (this session)"
-                      onClick={ignoreWord}
-                    >
-                      + Ignore word
-                    </button>
+                  ) : (
+                    <>
+                      <p className="wordpop-msg">
+                        {picked.message ?? "No engine issue in this word — you can still replace it."}
+                      </p>
+                      {picked.suggestions.length > 0 && (
+                        <div className="chips">
+                          {picked.suggestions.map((s, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              aria-label={s === null ? "Remove word" : `suggestion: ${s}`}
+                              onClick={() => commitWord(s)}
+                            >
+                              {s === null ? "(remove)" : s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="wordpop-row">
+                        <input
+                          ref={editRef}
+                          aria-label="Edit word"
+                          value={editVal}
+                          onChange={(e) => setEditVal(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              commitEdit();
+                            }
+                          }}
+                        />
+                        <button type="button" aria-label="Replace word" onClick={commitEdit}>
+                          Replace
+                        </button>
+                      </div>
+                      {picked.message && stripWord(picked.word) && (
+                        <button
+                          type="button"
+                          className="dict-add"
+                          aria-label="Add to dictionary"
+                          title="Never flag this word again"
+                          onClick={addToDictionary}
+                        >
+                          + Add to dictionary
+                        </button>
+                      )}
+                      {stripWord(picked.word) && (
+                        <button
+                          type="button"
+                          className="dict-add"
+                          aria-label="Add as abbreviation"
+                          title="Teach this word as a shortcut for a longer term"
+                          onClick={openTeach}
+                        >
+                          + Add as abbreviation
+                        </button>
+                      )}
+                      {stripWord(picked.word) && (
+                        <button
+                          type="button"
+                          className="dict-add"
+                          aria-label="Ignore word"
+                          title="Never flag or suggest this token (this session)"
+                          onClick={ignoreWord}
+                        >
+                          + Ignore word
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </>

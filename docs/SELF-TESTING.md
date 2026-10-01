@@ -64,11 +64,13 @@ pnpm build        # tsc + vite; must exit 0
 - If `no text captured within deadline` in the log: the modifier wait
   (wait_modifiers_released) is missing/short-circuited — see AGENTS.md rule 1.
 - Sections J-N (v0.2 abbreviations/ignored words) cover: Settings teaching
-  (trigger + expansion inputs, ignore input, confirm-guesses checkbox),
-  exact-abbreviation review + quick paths, the guess decision table
-  (confirm ON asks via review window, OFF pastes unambiguous guesses,
-  ambiguous always asks), and both popover teach buttons
-  ("+ Add as abbreviation", "+ Ignore word") with live engine re-runs.
+  (trigger + expansion inputs, ignore input, the two guess checkboxes),
+  exact-abbreviation review + quick paths, the 2x2 guess matrix
+  (skip-window x auto-apply; ambiguous always opens the window) plus M22-M23
+  (auto-apply pre-applies in the NORMAL review window too), and both popover
+  teach buttons ("+ Add as abbreviation" opens the teach sub-form: trigger
+  shown, type the expansion, Add/Cancel; "+ Ignore word") with live engine
+  re-runs.
 - Checkbox toggles in the suite MUST be verified against UIA ToggleState
   (`Set-Checkbox` helper): an unverified geometry click can be eaten by
   focus/scroll and silently test the wrong branch (first run's M6-M8).
@@ -76,6 +78,11 @@ pnpm build        # tsc + vite; must exit 0
   not grammar intuition: "is there a tool for sc2 here" gets sentence
   capitalization, "the sc2 game" does NOT (harper quirk; AGENTS.md rule 22)
   — hence K7 `-ceq "Is ..."` vs L2 `-ceq "the ..."`.
+
+- `scripts/color-check.ps1` (one-off visual check): stages a sentence with
+  all three highlight classes (error / guessed abbr / exact abbr) in a
+  review window and screenshots it to `colors-check.png`; backs up and
+  restores the user's settings itself.
 
 ## 5. Manual checks (things the script can't judge)
 
