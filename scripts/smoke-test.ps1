@@ -425,6 +425,13 @@ $np = New-Selection "i beleive thiss is a exampel of bad text"
 [System.Windows.Forms.SendKeys]::SendWait("^%g")
 Un-Top $np.MainWindowHandle
 $zw = Wait-Window "ZWriter" 10
+if ($zw -eq [IntPtr]::Zero) {
+    # same capture race other sections retry: the selection is still live,
+    # the first Ctrl+C just lost the foreground race on a busy machine
+    Step "A first press lost the capture race - retrying once"
+    [System.Windows.Forms.SendKeys]::SendWait("^%g")
+    $zw = Wait-Window "ZWriter" 10
+}
 Check "A1 review window appeared (Ctrl+Alt+G)" ($zw -ne [IntPtr]::Zero)
 Show-Above $zw
 Start-Sleep -Milliseconds 400

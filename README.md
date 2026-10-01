@@ -12,6 +12,12 @@ Fixes are made by [Harper](https://writewithharper.com) — a **rules-based
 grammar engine, no AI, no internet**. Nothing you write ever leaves your
 machine.
 
+![ZWriter review window](docs/screenshot-review.png)
+
+*The review window: errors highlighted amber, a taught abbreviation
+(`sc2`) underlined green, an unsure guess (`se2`) dashed violet — fix on
+the right, one key to apply.*
+
 ---
 
 ## What it does
@@ -41,7 +47,16 @@ already clean.
   will suggest the expansion (even from one letter off, like `se2` or
   `sc 2`). Exact matches always expand; near-misses show up as a
   suggestion you confirm. Teach pairs in Settings, or click a word →
-  **"+ Add as abbreviation"**.
+  **"+ Add as abbreviation"** — a small form opens with the word already
+  filled in; type the full term, click **Add abbreviation**.
+- **Unsure abbreviations, your call** — three distinct highlights: normal
+  errors amber, confirmed abbreviations green, unsure guesses violet
+  dashed — you always see why something is flagged. Two Settings
+  checkboxes control the unsure ones: *skip* (quick fix leaves them as
+  typed, no window) and *auto-apply* (use the expansion anyway — quick
+  fix pastes it straight away, the review window arrives with it already
+  applied). Words equally close to two taught abbreviations always ask,
+  whatever the settings.
 - **Ignored words** — codes and IDs (`s12`, `mp3`) are left exactly as
   typed: never flagged, never "corrected". Session-only by design — the
   list clears when ZWriter restarts. Settings section, or click a word →
@@ -67,8 +82,8 @@ Grab the latest release from the
 
 | File | What it is |
 |------|------------|
-| `ZWriter_0.1.0_x64-setup.exe` | Installer (recommended). Start-menu shortcut, easy uninstall. |
-| `ZWriter_0.1.0_portable.exe` | Portable single exe. Run it anywhere, no install. |
+| `ZWriter_0.2.0_x64-setup.exe` | Installer (recommended). Start-menu shortcut, easy uninstall. |
+| `ZWriter_0.2.0_portable.exe` | Portable single exe. Run it anywhere, no install. |
 
 1. Run the installer (or the portable exe).
 2. ZWriter starts minimized to the system tray.
@@ -95,7 +110,7 @@ scripts\build.bat
 The build produces:
 
 - `src-tauri\target\release\zwriter.exe` — portable exe
-- `src-tauri\target\release\bundle\nsis\ZWriter_0.1.0_x64-setup.exe` — installer
+- `src-tauri\target\release\bundle\nsis\ZWriter_0.2.0_x64-setup.exe` — installer
 
 For development with hot reload: `scripts\dev.bat`.
 (On Windows, build through the provided `.bat` scripts — Git Bash's
@@ -156,7 +171,7 @@ selection ──▶ capture ──▶ Harper engine ──▶ review / paste ─
 | `src-tauri/src/wininput.rs` | Windows input injection (`SendInput`, foreground-window helpers) |
 | `src-tauri/src/lib.rs` | Tauri commands, tray, global hotkeys, settings persistence |
 | `src/Review.tsx` | Review window (highlights, word picker, history) |
-| `src/Settings.tsx` | Settings window (hotkeys, custom dictionary, autostart) |
+| `src/Settings.tsx` | Settings window (hotkeys, dictionary, abbreviations, ignored words, autostart) |
 | `scripts/` | `dev.bat`, `build.bat`, and the end-to-end smoke test |
 | `docs/SELF-TESTING.md` | How the app is tested end-to-end |
 
@@ -181,13 +196,14 @@ selection ──▶ capture ──▶ Harper engine ──▶ review / paste ─
 
 ```cmd
 scripts\dev.bat               :: run with hot reload
-cd src-tauri && cargo test    :: engine unit tests (14)
-scripts\smoke-test.ps1        :: 68-check end-to-end UI suite (needs a display)
+cd src-tauri && cargo test    :: engine unit tests (32)
+scripts\smoke-test.ps1        :: 135-check end-to-end UI suite (needs a display)
 ```
 
 The smoke suite drives the real app with real global hotkeys and Notepad:
 capture → review → apply, quick fix, word picker, custom dictionary,
-hotkey rebinding, plus log-derived invariants. See
+abbreviations (exact, guessed, and the 2×2 unsure-behavior matrix), hotkey
+rebinding, plus log-derived invariants. See
 [docs/SELF-TESTING.md](docs/SELF-TESTING.md).
 
 ## License

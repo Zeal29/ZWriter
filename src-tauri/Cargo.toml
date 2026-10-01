@@ -1,6 +1,6 @@
 [package]
 name = "zwriter"
-version = "0.1.0"
+version = "0.2.0"
 description = "ZWriter — system-wide offline grammar fixer"
 authors = ["Ali Nawaz"]
 edition = "2021"

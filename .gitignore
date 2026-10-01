@@ -26,3 +26,6 @@ dist-ssr
 # Rust / Tauri build output
 src-tauri/target/
 src-tauri/gen/schemas/
+
+# Test artifacts
+colors-check.png
