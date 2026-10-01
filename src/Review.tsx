@@ -90,7 +90,7 @@ function OriginalText({
       <button
         key={key++}
         type="button"
-        className={`word${best ? " err" : ""}`}
+        className={`word${best ? " err" : ""}${best?.guessed ? " guess" : ""}`}
         title={best ? `${best.kind}: ${best.message}` : "Click to fix or edit this word"}
         aria-label={`word: ${word}`}
         onClick={(ev) =>
@@ -125,6 +125,8 @@ function Review() {
   const [quickChord, setQuickChord] = useState("ctrl+space");
   const [picked, setPicked] = useState<WordPick | null>(null);
   const [editVal, setEditVal] = useState("");
+  const [abbrHint, setAbbrHint] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<FixReady | null>(null);
   pendingRef.current = fix;
   const pickedRef = useRef<WordPick | null>(null);
@@ -251,6 +253,7 @@ function Review() {
     const top = tr.bottom - pr.top + 6;
     setPicked({ ...p, left, top });
     setEditVal(p.word);
+    setAbbrHint("");
   }, []);
 
   /** Replace the picked span (null = remove it) and re-run the engine live. */
@@ -303,15 +306,23 @@ function Review() {
   }, []);
 
   /** Teach an abbreviation: the picked word is the trigger, the popover's
-   *  edit box holds the full term. The engine re-run comes from the
-   *  abbreviations-changed event the command emits. */
+   *  edit box holds the full term. The button is always responsive — with
+   *  no full term typed it focuses the box and says so instead of silently
+   *  doing nothing. The engine re-run comes from the abbreviations-changed
+   *  event the command emits. */
   const addAsAbbreviation = useCallback(() => {
     const p = pickedRef.current;
     if (!p) return;
     const trigger = stripWord(p.word);
     const expansion = editVal.trim();
-    if (!trigger || !expansion) return;
+    if (!trigger) return;
+    if (!expansion || expansion === p.word.trim()) {
+      setAbbrHint("Type the full term in the box above, then click here again.");
+      editRef.current?.focus();
+      return;
+    }
     setPicked(null);
+    setAbbrHint("");
     invoke("add_abbreviation", { trigger, expansion })
       .then(() => setStatus(`"${trigger}" now expands to "${expansion}".`))
       .catch((e) => setStatus(`Could not add abbreviation: ${e}`));
@@ -405,6 +416,25 @@ function Review() {
                       ))}
                     </div>
                   )}
+                  {abbrHint && <p className="wordpop-hint">{abbrHint}</p>}
+                  <div className="wordpop-row">
+                    <input
+                      ref={editRef}
+                      aria-label="Edit word"
+                      value={editVal}
+                      onChange={(e) => setEditVal(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          commitEdit();
+                        }
+                      }}
+                    />
+                    <button type="button" aria-label="Replace word" onClick={commitEdit}>
+                      Replace
+                    </button>
+                  </div>
                   {picked.message && stripWord(picked.word) && (
                     <button
                       type="button"
@@ -421,8 +451,7 @@ function Review() {
                       type="button"
                       className="dict-add"
                       aria-label="Add as abbreviation"
-                      title="Type the full term in the box below first"
-                      disabled={!editVal.trim() || editVal.trim() === picked.word.trim()}
+                      title="Turn this word into a shortcut for the term in the box above"
                       onClick={addAsAbbreviation}
                     >
                       + Add as abbreviation
@@ -433,29 +462,12 @@ function Review() {
                       type="button"
                       className="dict-add"
                       aria-label="Ignore word"
-                      title="Never flag or suggest this token"
+                      title="Never flag or suggest this token (this session)"
                       onClick={ignoreWord}
                     >
                       + Ignore word
                     </button>
                   )}
-                  <div className="wordpop-row">
-                    <input
-                      aria-label="Edit word"
-                      value={editVal}
-                      onChange={(e) => setEditVal(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          commitEdit();
-                        }
-                      }}
-                    />
-                    <button type="button" aria-label="Replace word" onClick={commitEdit}>
-                      Replace
-                    </button>
-                  </div>
                 </div>
               </>
             )}

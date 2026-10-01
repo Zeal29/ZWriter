@@ -11,11 +11,10 @@
 #   H. User edit on a clean capture: Apply stays enabled and pastes the edit
 #   I. Custom dictionary: picker "Add to dictionary" unflags the word live,
 #      Settings add/remove works, removal re-flags it
-#   J. Abbreviations + ignored words + confirm checkbox taught in Settings
+#   J. Abbreviations + ignored words + guess checkboxes taught in Settings
 #   K. Exact abbreviation: review shows the expansion, Apply pastes it
 #   L. Quick fix, exact abbreviation: pastes instantly, no window
-#   M. Quick fix, GUESSED abbreviation: confirm ON asks, OFF pastes,
-#      ambiguous guess always asks
+#   M. Quick fix x guess checkboxes: the full 2x2 matrix + ambiguous carve-out
 #   N. Popover teach: "Add as abbreviation" from the word popover,
 #      "Ignore word" unflags live
 #   C. Rebind: Settings UI record Ctrl+Alt+J -> old chord dead, new works,
@@ -355,6 +354,27 @@ function Dismiss-Review() {
     }
 }
 
+# Capture a clean anchor sentence and open Settings from its review window
+# (sets $script:st to the settings hwnd). Settings has no hotkey of its own;
+# the review window's Ctrl+, is the only scriptable way in.
+function Anchor-Settings($text) {
+    $np = New-Selection $text
+    [System.Windows.Forms.SendKeys]::SendWait("^%g")
+    Un-Top $np.MainWindowHandle
+    $h = Wait-Window "ZWriter" 6
+    if ($h -eq [IntPtr]::Zero) {
+        Step "anchor capture race - retrying once"
+        [System.Windows.Forms.SendKeys]::SendWait("^%g")
+        $h = Wait-Window "ZWriter" 10
+    }
+    Show-Above $h
+    Click-Title $h
+    [System.Windows.Forms.SendKeys]::SendWait("^,")
+    $script:st = Wait-Window "ZWriter Settings" 10
+    Show-Above $script:st
+    Start-Sleep -Milliseconds 800
+}
+
 # --------------------------------------------------------------- run
 
 # Force a known state: restart the app with default chords, keeping the
@@ -660,9 +680,13 @@ Start-Sleep -Milliseconds 200
 Check "J10 Add ignored word clicked" (Click-Button $st "Add ignored word")
 Start-Sleep -Milliseconds 800
 Check "J11 skool ignore chip listed" (Has-Button $st "Remove ignored word skool")
-Check "J12 confirm checkbox to OFF" (Set-Checkbox $st "Confirm guessed abbreviations" "Off")
-Start-Sleep -Milliseconds 500
-Check "J13 checkbox back ON" (Set-Checkbox $st "Confirm guessed abbreviations" "On")
+Check "J12 skip-unsure checkbox to ON" (Set-Checkbox $st "Skip unsure abbreviations" "On")
+Start-Sleep -Milliseconds 400
+Check "J13 skip-unsure checkbox back OFF" (Set-Checkbox $st "Skip unsure abbreviations" "Off")
+Start-Sleep -Milliseconds 400
+Check "J13b auto-apply checkbox to ON" (Set-Checkbox $st "Auto-apply unsure abbreviations" "On")
+Start-Sleep -Milliseconds 400
+Check "J13c auto-apply checkbox back OFF" (Set-Checkbox $st "Auto-apply unsure abbreviations" "Off")
 Start-Sleep -Milliseconds 500
 Click-Button $st "Close settings*" | Out-Null
 Un-Top $st
@@ -714,83 +738,115 @@ Step ("doc after L: " + $txt)
 Check "L2 quick pasted the expansion" ($txt -ceq "the StarCraft 2 game")
 Check "L3 no review window for exact quick fix" ((Get-Z "ZWriter") -eq [IntPtr]::Zero)
 
-# ---- M. quick fix with a GUESSED abbreviation: option A vs B ----
-# (a) confirm ON (default): se2 is a guess (one edit from sc2) -> the
-#     review window asks instead of pasting.
-$np = New-Selection "the se2 id"
-[System.Windows.Forms.SendKeys]::SendWait("^%f")
-Un-Top $np.MainWindowHandle
-$zw = Wait-Window "ZWriter" 6
-if ($zw -eq [IntPtr]::Zero) {
-    Step "Ma first press did not open window (capture race) - retrying once"
-    [System.Windows.Forms.SendKeys]::SendWait("^%f")
-    $zw = Wait-Window "ZWriter" 10
-}
-Check "M1 confirm ON: guess opens the review window" ($zw -ne [IntPtr]::Zero)
-Show-Above $zw
-Start-Sleep -Milliseconds 500
-Check "M2 guessed word clicked" (Click-Button $zw "word: se2")
-Check "M3 expansion chip offered" (Has-Button $zw "suggestion: StarCraft 2")
-[System.Windows.Forms.SendKeys]::SendWait("{ESC}")   # close popover; backdrop eats the later Skip click
-Start-Sleep -Milliseconds 300
-# (b) toggle confirm OFF from the still-open review window, then the same
-#     guess pastes without asking.
-Show-Above $zw
-Click-Title $zw
-[System.Windows.Forms.SendKeys]::SendWait("^,")
-$st = Wait-Window "ZWriter Settings" 10
-Check "M4 settings opened from review" ($st -ne [IntPtr]::Zero)
-Show-Above $st
-Start-Sleep -Milliseconds 800
-Check "M5 confirm checkbox toggled OFF" (Set-Checkbox $st "Confirm guessed abbreviations" "Off")
-Start-Sleep -Milliseconds 500
+# ---- M. quick fix x unsure-abbreviation checkboxes: the 2x2 matrix ----
+# checkbox1 "Skip unsure abbreviations" (no window), checkbox2 "Auto-apply
+# unsure abbreviations". Every toggle is VERIFIED against UIA ToggleState.
+# rows (C1,C2): (off,off)=window+chip [default]; (on,off)=word left as typed;
+# (on,on)=apply+paste, no window; (off,on)=window with the guess pre-applied.
+
+Anchor-Settings "anchor m row two settings"
+Check "M0 settings opened for row-2 toggles" ($st -ne [IntPtr]::Zero)
+Check "M1 checkbox1 to ON" (Set-Checkbox $st "Skip unsure abbreviations" "On")
+Check "M2 checkbox2 stays OFF" (Set-Checkbox $st "Auto-apply unsure abbreviations" "Off")
 Click-Button $st "Close settings*" | Out-Null
 Un-Top $st
 Start-Sleep -Milliseconds 400
 Dismiss-Review
-Set-Clipboard -Value "SENTINEL-M"
+# row 2 (on,off): unsure guess -> word untouched, no window, clipboard kept
+Set-Clipboard -Value "SENTINEL-M2"
 $np = New-Selection "the se2 id"
 [System.Windows.Forms.SendKeys]::SendWait("^%f")
 Un-Top $np.MainWindowHandle
 Start-Sleep -Seconds 4
 $clip = Get-Clipboard -Raw
-Check "M6 confirm OFF: clipboard sentinel restored" ($clip -eq "SENTINEL-M")
+Check "M3 row2: clipboard sentinel restored" ($clip -eq "SENTINEL-M2")
 $txt = Read-Notepad $np
-Step ("doc after Mb: " + $txt)
-Check "M7 confirm OFF: guess pasted" ($txt -ceq "the StarCraft 2 id")
-Check "M8 confirm OFF: no review window" ((Get-Z "ZWriter") -eq [IntPtr]::Zero)
-# (c) ambiguous guess: se2 with cs2 defined would be unambiguous, so use a
-# word one edit from BOTH sc2 and cs2 -> window even when OFF.
+Step ("doc after M row2: " + $txt)
+Check "M4 row2: unsure word left as typed" ($txt -ceq "the se2 id")
+Check "M5 row2: no review window" ((Get-Z "ZWriter") -eq [IntPtr]::Zero)
+# ambiguous beats checkbox1: cc2 is one edit from sc2 AND cs2 -> window
 $np = New-Selection "the cc2 id"
 [System.Windows.Forms.SendKeys]::SendWait("^%f")
 Un-Top $np.MainWindowHandle
 $zw = Wait-Window "ZWriter" 6
 if ($zw -eq [IntPtr]::Zero) {
-    Step "Mc first press did not open window (capture race) - retrying once"
+    Step "Mc capture race - retrying once"
     [System.Windows.Forms.SendKeys]::SendWait("^%f")
     $zw = Wait-Window "ZWriter" 10
 }
-Check "M9 ambiguous guess opens window even when OFF" ($zw -ne [IntPtr]::Zero)
+Check "M6 ambiguous opens window even with checkbox1" ($zw -ne [IntPtr]::Zero)
 Show-Above $zw
 Start-Sleep -Milliseconds 500
-Check "M10 ambiguous word clicked" (Click-Button $zw "word: cc2")
-Check "M11 first candidate offered" (Has-Button $zw "suggestion: StarCraft 2")
-Check "M12 second candidate offered" (Has-Button $zw "suggestion: Counter-Strike 2")
-[System.Windows.Forms.SendKeys]::SendWait("{ESC}")   # close popover before settings + dismiss
+Check "M7 ambiguous word clicked" (Click-Button $zw "word: cc2")
+Check "M8 first candidate offered" (Has-Button $zw "suggestion: StarCraft 2")
+Check "M9 second candidate offered" (Has-Button $zw "suggestion: Counter-Strike 2")
+[System.Windows.Forms.SendKeys]::SendWait("{ESC}")
 Start-Sleep -Milliseconds 300
-# restore confirm ON before handing over to the rebind sections
-Show-Above $zw
-Click-Title $zw
-[System.Windows.Forms.SendKeys]::SendWait("^,")
-$st = Wait-Window "ZWriter Settings" 10
-Check "M13 settings reopened" ($st -ne [IntPtr]::Zero)
-Show-Above $st
-Start-Sleep -Milliseconds 800
-Check "M14 confirm checkbox back ON" (Set-Checkbox $st "Confirm guessed abbreviations" "On")
-Start-Sleep -Milliseconds 500
+Dismiss-Review
+# row 1 (on,on): unsure guess -> applied + pasted, no window
+Anchor-Settings "anchor m row one settings"
+Check "M10 checkbox2 to ON" (Set-Checkbox $st "Auto-apply unsure abbreviations" "On")
 Click-Button $st "Close settings*" | Out-Null
 Un-Top $st
 Start-Sleep -Milliseconds 400
+Dismiss-Review
+Set-Clipboard -Value "SENTINEL-M1"
+$np = New-Selection "the se2 id"
+[System.Windows.Forms.SendKeys]::SendWait("^%f")
+Un-Top $np.MainWindowHandle
+Start-Sleep -Seconds 4
+$clip = Get-Clipboard -Raw
+Check "M11 row1: clipboard sentinel restored" ($clip -eq "SENTINEL-M1")
+$txt = Read-Notepad $np
+Step ("doc after M row1: " + $txt)
+Check "M12 row1: guess applied + pasted" ($txt -ceq "the StarCraft 2 id")
+Check "M13 row1: no review window" ((Get-Z "ZWriter") -eq [IntPtr]::Zero)
+# row 3 (off,on): window opens, guess pre-applied
+Anchor-Settings "anchor m row three settings"
+Check "M14 checkbox1 to OFF" (Set-Checkbox $st "Skip unsure abbreviations" "Off")
+Click-Button $st "Close settings*" | Out-Null
+Un-Top $st
+Start-Sleep -Milliseconds 400
+Dismiss-Review
+$np = New-Selection "the se2 id"
+[System.Windows.Forms.SendKeys]::SendWait("^%f")
+Un-Top $np.MainWindowHandle
+$zw = Wait-Window "ZWriter" 6
+if ($zw -eq [IntPtr]::Zero) {
+    Step "Me capture race - retrying once"
+    [System.Windows.Forms.SendKeys]::SendWait("^%f")
+    $zw = Wait-Window "ZWriter" 10
+}
+Check "M15 row3: window opens" ($zw -ne [IntPtr]::Zero)
+Show-Above $zw
+Start-Sleep -Milliseconds 500
+Check "M16 row3: guess pre-applied in fixed pane" (Has-Text $zw "*StarCraft 2*")
+Dismiss-Review
+# row 4 (off,off): defaults - window, chip, NOT applied
+Anchor-Settings "anchor m row four settings"
+Check "M17 checkbox2 to OFF (defaults)" (Set-Checkbox $st "Auto-apply unsure abbreviations" "Off")
+Click-Button $st "Close settings*" | Out-Null
+Un-Top $st
+Start-Sleep -Milliseconds 400
+Dismiss-Review
+$np = New-Selection "the se2 id"
+[System.Windows.Forms.SendKeys]::SendWait("^%f")
+Un-Top $np.MainWindowHandle
+$zw = Wait-Window "ZWriter" 6
+if ($zw -eq [IntPtr]::Zero) {
+    Step "Mf capture race - retrying once"
+    [System.Windows.Forms.SendKeys]::SendWait("^%f")
+    $zw = Wait-Window "ZWriter" 10
+}
+Check "M18 row4: window opens (default)" ($zw -ne [IntPtr]::Zero)
+Show-Above $zw
+Start-Sleep -Milliseconds 500
+$wtxt = Read-Window-Text $zw
+Check "M19 row4: guess NOT applied" ($wtxt -and $wtxt -notmatch "StarCraft")
+Check "M20 row4: guessed word clicked" (Click-Button $zw "word: se2")
+Check "M21 row4: chip offered" (Has-Button $zw "suggestion: StarCraft 2")
+[System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+Start-Sleep -Milliseconds 300
 Dismiss-Review
 
 # ---- N. teach from the word popover: Add-as-abbreviation + Ignore word ----
@@ -812,6 +868,7 @@ Show-Above $zw
 Start-Sleep -Milliseconds 500
 Check "N2 guessed word se2 clicked" (Click-Button $zw "word: se2")
 Check "N3 Add-as-abbreviation button offered" (Has-Button $zw "Add as abbreviation")
+Check "N3b Add-as-abbreviation stays enabled before typing" (Test-Button-Enabled $zw "Add as abbreviation")
 Check "N4 word editor focused" (Click-Edit $zw "Edit word")
 [System.Windows.Forms.SendKeys]::SendWait("^a")
 Start-Sleep -Milliseconds 200
@@ -950,8 +1007,8 @@ Step "app log:"
 Get-Content $appLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
 
 # Log-derived invariants (independent of desktop focus races):
-# 15 review-path fixes (A, E, F, G, H, I, J-anchor, K, Ma, Mc, N, N-ignore,
-# C1, C6, D4); 9 pastes (A, B, E, F, G, H, K, L, Mb);
+# 20 review-path fixes (A, E, F, G, H, I, J-anchor, K, 4x M-anchors, Mc, Me,
+# Mf, N, N-ignore, C1, C6, D4); 9 pastes (A, B, E, F, G, H, K, L, M-row1);
 # 0 failed captures; 0 clean-text shortcuts.
 $logText = Get-Content $appLog -Raw -ErrorAction SilentlyContinue
 # "no text captured" is eprintln (stderr) - check both redirects, or the
@@ -961,7 +1018,7 @@ $fixReady = ([regex]::Matches($logText, "fix ready")).Count
 $pasted = ([regex]::Matches($logText, "pasted fix")).Count
 $noCapture = ([regex]::Matches($logText + " " + $errText, "no text captured")).Count
 $clean = ([regex]::Matches($logText, "already clean")).Count
-Check "L1 fix-ready count = 15" ($fixReady -eq 15)
+Check "L1 fix-ready count = 20" ($fixReady -eq 20)
 Check "L2 pasted count = 9" ($pasted -eq 9)
 Check "L3 no failed captures" ($noCapture -eq 0)
 Check "L4 no unexpected clean-skips" ($clean -eq 0)

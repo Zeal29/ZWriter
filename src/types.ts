@@ -42,8 +42,9 @@ export interface Settings {
   autostart: boolean;
   customWords: string[]; // never flagged as spelling errors (case-insensitive)
   abbreviations: Abbreviation[]; // taught trigger -> expansion pairs
-  ignoredWords: string[]; // codes/IDs: never flagged, never suggested
-  confirmGuesses: boolean; // quick fix asks before applying a GUESSED abbr
+  ignoredWords: string[]; // session-only: never flagged; cleared on restart
+  skipGuessWindow: boolean; // quick fix: no review window for unsure guesses
+  autoApplyGuesses: boolean; // quick fix: apply the guessed expansion anyway
 }
 
 /** "ctrl+shift+space" -> "Ctrl + Shift + Space" for display. */

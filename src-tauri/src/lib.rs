@@ -71,18 +71,11 @@ fn load_settings(app: &AppHandle) {
             .collect();
         dedup_abbreviations(&mut s.abbreviations);
     }
-    if let Some(v) = saved.get("ignoredWords").and_then(|v| v.as_array()) {
-        s.ignored_words = v
-            .iter()
-            .filter_map(|x| x.as_str())
-            .map(|x| x.trim().to_string())
-            .filter(|x| !x.is_empty())
-            .collect();
-        dedup_words(&mut s.ignored_words);
-    }
-    if let Some(v) = saved.get("confirmGuesses").and_then(|v| v.as_bool()) {
-        s.confirm_guesses = v;
-    }
+    // NB: ignoredWords is deliberately NOT loaded — the ignore list is
+    // session-only and starts empty every launch. A stale key in an old
+    // settings.json is dropped on the next save. The same is true for the
+    // removed "confirmGuesses" key (replaced by skipGuessWindow /
+    // autoApplyGuesses).
 }
 
 /// Case-insensitive dedup, keeping the first (display) spelling.
@@ -116,8 +109,8 @@ fn save_settings(app: &AppHandle) {
         "quickHotkey": s.quick_hotkey,
         "customWords": s.custom_words,
         "abbreviations": s.abbreviations,
-        "ignoredWords": s.ignored_words,
-        "confirmGuesses": s.confirm_guesses,
+        "skipGuessWindow": s.skip_guess_window,
+        "autoApplyGuesses": s.auto_apply_guesses,
     });
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -413,8 +406,10 @@ fn remove_abbreviation(app: AppHandle, trigger: String) -> Result<Vec<Abbreviati
     Ok(list)
 }
 
-/// Ignore token(s): never flagged, never guessed, never suggested. Bulk
-/// add via whitespace split, like the custom dictionary.
+/// Ignore token(s) for THIS SESSION: never flagged, never guessed, never
+/// suggested. Session-only — NOT persisted; the list starts empty every
+/// launch (that is the difference from the custom dictionary). Bulk add via
+/// whitespace split, like the custom dictionary.
 #[tauri::command]
 fn add_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, String> {
     let new_words: Vec<String> = word
@@ -441,7 +436,7 @@ fn add_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, String>
         s.ignored_words.clone()
     };
     apply_teachings(&app);
-    save_settings(&app);
+    // Deliberately NO save_settings: the list is session-only.
     let _ = app.emit("ignored-words-changed", serde_json::json!({ "words": words }));
     Ok(words)
 }
@@ -457,18 +452,31 @@ fn remove_ignored_word(app: AppHandle, word: String) -> Result<Vec<String>, Stri
         s.ignored_words.clone()
     };
     apply_teachings(&app);
-    save_settings(&app);
     let _ = app.emit("ignored-words-changed", serde_json::json!({ "words": words }));
     Ok(words)
 }
 
-/// Option A <-> B toggle for the quick path's guessed abbreviations.
+/// Quick fix x unsure abbreviations, checkbox 1: never open the review
+/// window for a guessed abbreviation.
 #[tauri::command]
-fn set_confirm_guesses(app: AppHandle, enabled: bool) -> Result<bool, String> {
-    println!("[zwriter] set_confirm_guesses({enabled})");
+fn set_skip_guess_window(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    println!("[zwriter] set_skip_guess_window({enabled})");
     {
         let state = app.state::<AppState>();
-        state.settings.lock().unwrap().confirm_guesses = enabled;
+        state.settings.lock().unwrap().skip_guess_window = enabled;
+    }
+    save_settings(&app);
+    Ok(enabled)
+}
+
+/// Quick fix x unsure abbreviations, checkbox 2: use the guessed expansion
+/// anyway (pasted directly, or pre-applied when the window opens).
+#[tauri::command]
+fn set_auto_apply_guesses(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    println!("[zwriter] set_auto_apply_guesses({enabled})");
+    {
+        let state = app.state::<AppState>();
+        state.settings.lock().unwrap().auto_apply_guesses = enabled;
     }
     save_settings(&app);
     Ok(enabled)
@@ -633,7 +641,8 @@ pub fn run() {
             remove_abbreviation,
             add_ignored_word,
             remove_ignored_word,
-            set_confirm_guesses,
+            set_skip_guess_window,
+            set_auto_apply_guesses,
             open_settings,
             hide_settings
         ])

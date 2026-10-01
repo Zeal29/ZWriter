@@ -49,21 +49,31 @@ app the user started in.
   case-insensitive + space-skipping, word-bounded. **Guessed match**: one
   in-word letter edit off a digit-bearing trigger (digits must match per
   position — `sc3` is never StarCraft 2); a guess is a suggestion chip,
-  never auto-applied from the engine, EXCEPT by the quick path when
-  `confirmGuesses` is off and the guess is unambiguous. **Ambiguous guess**
-  (one edit from 2+ triggers) always opens the review window.
-- **Ignored word** = exact token (settings.json `ignoredWords`) never
-  flagged, never guessed, never suggested — for IDs/codes (`s12`), distinct
-  from the custom dictionary ("this IS a word"). Precedence per token:
-  exact abbreviation > ignored > guessed > harper.
+  never auto-applied by the engine. **Ambiguous guess** (one edit from 2+
+  triggers) ALWAYS opens the review window under every setting combination.
+- **Guess checkboxes** = TWO settings governing the QUICK path only
+  (`skipGuessWindow` / `skip_guess_window`, `autoApplyGuesses` /
+  `auto_apply_guesses`, both default off). Matrix: (off,off) window + chip;
+  (on,off) word left as typed, silently; (on,on) apply + paste, no window;
+  (off,on) window with the guess pre-applied. Replaced `confirmGuesses`
+  (old key ignored + dropped on next save).
+- **Ignored word** = exact token (SESSION-ONLY `Settings.ignored_words`,
+  NEVER persisted, empty every launch) never flagged, never guessed, never
+  suggested — for one-off codes/IDs; permanent vocabulary belongs in the
+  custom dictionary. Precedence per token: exact abbreviation > ignored >
+  guessed > harper.
 - **Alphanumeric rule** = a letter+digit run (`sc2`, `s12`, `mp3`, `x86`)
   never gets Spelling OR Capitalization lints (harper nags `mp3`→`MP3`).
 - **abbreviations-changed** / **ignored-words-changed** = broadcast events
   from the add/remove commands; Review.tsx re-runs the engine, Settings.tsx
   live-syncs (same pattern as custom-words-changed).
 - **Popover teach buttons** = "+ Add as abbreviation" (trigger = picked
-  word, expansion = the popover's edit box) and "+ Ignore word" next to
-  "+ Add to dictionary".
+  word, expansion = the popover's edit box ABOVE the buttons; clicking it
+  with no full term focuses the box + shows a hint — never disabled-silent)
+  and "+ Ignore word" (session-only) next to "+ Add to dictionary".
+- **word.guess** = CSS class on guessed-lint tokens: dashed violet
+  underline, no error background — an unsure match must not look like a
+  correction.
 
 ## Non-obvious rules (learned the hard way)
 
@@ -180,6 +190,11 @@ app the user started in.
     squashing spaces to find "candidate tokens" fuses the whole sentence
     into one run ("whatisse2anyway"). Match at word starts against each
     trigger (bounded by trigger shape), like the exact pass does.
+25. **Every silent early-return after a clipboard-clearing capture MUST
+    call restore_clipboard** — the capture cleared the clipboard before
+    Ctrl+C, so returning without pasting silently eats the user's
+    clipboard content (the "already clean" path had this bug too; found
+    while adding the skip-guess row).
 
 ## Knowledge sources
 
@@ -206,6 +221,31 @@ app the user started in.
   docs/SELF-TESTING.md.
 
 ## Verified / Questions / Assumptions
+
+**Verified (2026-10-01, twelfth session — user-feedback fixes):**
+- Fix 1 (session-only ignores): `ignoredWords` removed from load_settings
+  AND save_settings (rule 21 respected — both sides); list empty every
+  launch; add/remove commands no longer persist; Settings sub-text says
+  "for this session only".
+- Fix 2 (popover button): edit box moved above the teach buttons;
+  "+ Add as abbreviation" never disabled — no full term = focus the box +
+  hint line (`wordpop-hint`); smoke N3b asserts the enabled state.
+- Fix 3 (2x2 guess matrix): `confirmGuesses` replaced by
+  `skipGuessWindow` + `autoApplyGuesses` (both default off = window+chip);
+  commands `set_skip_guess_window` / `set_auto_apply_guesses`; flow.rs
+  quick branch implements the full matrix with the ambiguous carve-out;
+  guessed tokens get `.word.guess` dashed-violet styling (fix 3a).
+- BUG found by the new matrix: BOTH silent quick-path returns ("already
+  clean" and row-2 skip) left the user's clipboard holding the captured
+  text — restore_clipboard now runs on every no-paste return (rule 25).
+- `cargo test` **31/31**; `pnpm build` green; release + NSIS rebuilt.
+- Smoke suite **128/128** (was 117): J now exercises BOTH checkboxes
+  (verified ToggleState), M covers all four matrix rows with pasted-output
+  assertions — row2 "the se2 id" untouched, row1 "the StarCraft 2 id"
+  pasted with no window, row3 window with pre-applied guess, row4 window
+  with chip NOT applied — plus cc2 ambiguous-carve-out; N3b new. Log
+  invariants L1 fix-ready=20, L2 pasted=9, 0 failed captures. User
+  settings backed up + restored by the suite.
 
 **Verified (2026-09-30, eleventh session — v0.2 abbreviations + ignored words):**
 - Shipped end-to-end per `docs/superpowers/specs/2026-09-30-abbreviations-ignore-design.md`:

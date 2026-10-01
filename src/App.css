@@ -185,6 +185,19 @@ mark {
   outline: 1px solid var(--mark-text);
 }
 
+/* A GUESSED abbreviation (low confidence) must not look like an error:
+   dashed violet underline, no error background. */
+.text.original button.word.err.guess {
+  background: none;
+  color: var(--accent);
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+.text.original button.word.err.guess:hover {
+  outline: 1px dashed var(--accent);
+}
+
 /* word picker popover (anchored inside the original pane) */
 
 .pop-backdrop {
@@ -549,6 +562,12 @@ button.linklike:hover {
   padding: 4px 10px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+.wordpop .wordpop-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--accent);
 }
 
 .wordpop .dict-add:hover {

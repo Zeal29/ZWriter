@@ -43,9 +43,10 @@ already clean.
   suggestion you confirm. Teach pairs in Settings, or click a word →
   **"+ Add as abbreviation"**.
 - **Ignored words** — codes and IDs (`s12`, `mp3`) are left exactly as
-  typed: never flagged, never "corrected". Settings section, or click a
-  word → **"+ Ignore word"**. Codes that mix letters and digits are never
-  flagged in the first place.
+  typed: never flagged, never "corrected". Session-only by design — the
+  list clears when ZWriter restarts. Settings section, or click a word →
+  **"+ Ignore word"**. Codes that mix letters and digits are never flagged
+  in the first place.
 - **Word picker** — click any word in the review window to see every
   alternative the engine offers, or type your own replacement; the fix
   updates live.
@@ -109,9 +110,9 @@ For development with hot reload: `scripts\dev.bat`.
 | Fix instantly | Select text → `Ctrl+Space` |
 | Skip a suggestion | `Esc` or the **Skip** button |
 | Whitelist a word | Click the flagged word → **+ Add to dictionary** |
-| Teach an abbreviation | Click a word → type the full term → **+ Add as abbreviation** (or Settings → Abbreviations) |
-| Ignore a code/ID | Click the word → **+ Ignore word** (or Settings → Ignored words) |
-| Quick fix & guesses | Quick fix pastes exact abbreviations instantly; near-misses open the review window first (toggle in Settings) |
+| Teach an abbreviation | Click a word → type the full term in the box → **+ Add as abbreviation** (or Settings → Abbreviations) |
+| Ignore a code/ID | Click the word → **+ Ignore word** (session-only; or Settings → Ignored words) |
+| Quick fix & guesses | Exact abbreviations paste instantly. Unsure near-matches follow two Settings checkboxes: *skip unsure* (no review window) and *auto-apply unsure* (use the expansion anyway) |
 | Replace a word manually | Click any word → pick a suggestion or type your own |
 | Change hotkeys | Settings (gear icon, tray menu, or `Ctrl+,` in the review window) |
 | Quit | Tray icon → **Quit** |

@@ -222,10 +222,20 @@ function Settings() {
     }
   };
 
-  const toggleConfirmGuesses = (enabled: boolean) => {
-    setSettings((s) => (s ? { ...s, confirmGuesses: enabled } : s));
-    invoke<boolean>("set_confirm_guesses", { enabled })
-      .then((ok) => setSettings((s) => (s ? { ...s, confirmGuesses: ok } : s)))
+  const toggleSkipGuessWindow = (enabled: boolean) => {
+    setSettings((s) => (s ? { ...s, skipGuessWindow: enabled } : s));
+    invoke<boolean>("set_skip_guess_window", { enabled })
+      .then((ok) => setSettings((s) => (s ? { ...s, skipGuessWindow: ok } : s)))
+      .catch((e) => {
+        setError(String(e));
+        invoke<Settings>("get_settings").then(setSettings).catch(() => {});
+      });
+  };
+
+  const toggleAutoApplyGuesses = (enabled: boolean) => {
+    setSettings((s) => (s ? { ...s, autoApplyGuesses: enabled } : s));
+    invoke<boolean>("set_auto_apply_guesses", { enabled })
+      .then((ok) => setSettings((s) => (s ? { ...s, autoApplyGuesses: ok } : s)))
       .catch((e) => {
         setError(String(e));
         invoke<Settings>("get_settings").then(setSettings).catch(() => {});
@@ -380,7 +390,10 @@ function Settings() {
       <section className="setting-row">
         <div>
           <strong>Ignored words</strong>
-          <p className="sub">Codes and IDs (s12, mp3) are never flagged and never suggested</p>
+          <p className="sub">
+            Codes and IDs left as typed — for this session only, cleared when
+            ZWriter restarts
+          </p>
         </div>
       </section>
       <section className="dictionary">
@@ -402,7 +415,7 @@ function Settings() {
           </button>
         </div>
         {settings.ignoredWords.length === 0 ? (
-          <p className="sub">Nothing ignored. ZWriter leaves these exactly as you typed them.</p>
+          <p className="sub">Nothing ignored this session.</p>
         ) : (
           <div className="word-list">
             {[...settings.ignoredWords]
@@ -426,14 +439,33 @@ function Settings() {
 
       <section className="setting-row">
         <div>
-          <strong>Confirm guessed abbreviations</strong>
-          <p className="sub">Quick fix asks before applying a near-match like se2 → StarCraft 2</p>
+          <strong>Quick fix: skip unsure abbreviations</strong>
+          <p className="sub">
+            Near-matches like se2 are left as typed instead of opening the
+            review window (ambiguous words still open it)
+          </p>
         </div>
         <input
           type="checkbox"
-          aria-label="Confirm guessed abbreviations"
-          checked={settings.confirmGuesses}
-          onChange={(e) => toggleConfirmGuesses(e.target.checked)}
+          aria-label="Skip unsure abbreviations"
+          checked={settings.skipGuessWindow}
+          onChange={(e) => toggleSkipGuessWindow(e.target.checked)}
+        />
+      </section>
+
+      <section className="setting-row">
+        <div>
+          <strong>Quick fix: auto-apply unsure abbreviations</strong>
+          <p className="sub">
+            Use the guessed expansion without asking; when the review window
+            opens, it is already applied
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          aria-label="Auto-apply unsure abbreviations"
+          checked={settings.autoApplyGuesses}
+          onChange={(e) => toggleAutoApplyGuesses(e.target.checked)}
         />
       </section>
 

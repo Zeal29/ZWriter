@@ -1,6 +1,8 @@
 # ZWriter v0.2 — Abbreviations, Ignored Words & the Alphanumeric Rule
 
-Design spec — 2026-09-30. Status: approved in discussion, pending user review.
+Design spec — 2026-09-30, revised 2026-10-01 after first user feedback.
+Status: implemented; see §Revision 1 for the changes that supersede the
+original quick-path and ignore-list design.
 
 ## Problem
 
@@ -254,6 +256,38 @@ exe, settings backed up/restored as today:
   persist), and the precedence chain.
 - `README.md`: the three teach options (abbreviation / dictionary / ignore)
   and the quick-fix confirm checkbox.
+
+## Revision 1 (2026-10-01, first user feedback — supersedes parts of this spec)
+
+1. **Ignored words are SESSION-ONLY.** Never persisted (no `ignoredWords`
+   key in settings.json — removed from load AND save), the list starts
+   empty every launch. Rationale: ignore means "leave this one alone for
+   now"; permanent vocabulary belongs in the custom dictionary.
+2. **Popover teach flow fixed.** The edit box moved ABOVE the teach
+   buttons and "+ Add as abbreviation" is never disabled: clicking it
+   without a full term focuses the box and shows a hint instead of
+   silently doing nothing (the original disabled state read as "broken").
+3. **The single `confirmGuesses` checkbox is replaced by TWO** (both
+   default OFF = open the window with the guess as a chip):
+   - `skipGuessWindow` — quick fix never opens the review window for an
+     unsure (guessed) abbreviation;
+   - `autoApplyGuesses` — quick fix uses the guessed expansion anyway
+     (pasted directly, or pre-applied when the window opens).
+   Matrix: (off,off) window+chip · (on,off) word left as typed, silently ·
+   (on,on) apply+paste, no window · (off,on) window with guess pre-applied.
+   The old "ambiguous always asks" carve-out stands: a word one edit from
+   TWO triggers always opens the window as chips under every combination.
+   Old settings.json files may keep `confirmGuesses`; it is ignored and
+   dropped on the next save.
+4. **Guessed words look different from errors**: dashed violet underline
+   (`.word.guess`) instead of the error highlight, so an unsure match is
+   visibly a question, not a correction.
+5. **Clipboard fix found while testing**: every silent quick-path
+   early-return ("already clean", and the new skip-guess row) must restore
+   the saved clipboard — the capture cleared it, so returning without
+   pasting would otherwise eat the user's clipboard content.
+
+
 
 ## Risks / open points
 
