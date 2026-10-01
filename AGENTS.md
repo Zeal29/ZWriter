@@ -240,6 +240,25 @@ otepad.exe`), then find the real process
 
 ## Verified / Questions / Assumptions
 
+**Verified (2026-10-01, fourteenth session — published v0.2.0):**
+- Version bumped 0.1.0 -> 0.2.0 (package.json, tauri.conf.json, Cargo.toml;
+  Cargo.lock follows the build). Release rebuilt, **smoke 135/135** on the
+  v0.2.0 exe. First run of that suite was 129/135: ONE capture lost the
+  foreground race (1 "no text captured" in the suite's app log) and
+  cascaded into A1/A2/A4 + L1-L3 — environmental, not code (identical code
+  ran 135/135 the hour before). Section A (the only one without the
+  standard retry) now has the same capture-race retry as C/M/N.
+- Pushed ca56ed0..9bfbcd3 to main. Release **v0.2.0** live with
+  ZWriter_0.2.0_x64-setup.exe (4.31 MB) + ZWriter_0.2.0_portable.exe
+  (13.26 MB) and full release notes (asset sizes verified via
+  `gh release view --json assets`). README refreshed: hero screenshot
+  (docs/screenshot-review.png, committed), v0.2 features (guess checkboxes,
+  three highlights, teach sub-form), 0.2.0 asset names, 32/135 test
+  counts. Repo topics added via `gh repo edit --add-topic ...`.
+- Windows Git Bash: `gh --notes-file /tmp/...` needs `$(cygpath -w ...)`
+  (gh is a Windows binary; MSYS /tmp paths don't resolve). Relative repo
+  paths for assets work as-is.
+
 **Verified (2026-10-01, thirteenth session — second user-feedback round):**
 - Fix 1 (auto-apply governs BOTH hotkeys): the guess pre-apply moved ahead
   of the quick/review fork in `capture_and_fix` (gated on
